@@ -107,8 +107,9 @@
 	       {
 		int32 next_cd_event;
 
-                return(PCECD_Read(HuCPU.timestamp * 3, A, next_cd_event));                
+                return(PCECD_Read(HuCPU.timestamp * 3, A, next_cd_event));
 	       }
+
 
  EXP:
                if(IsHES)

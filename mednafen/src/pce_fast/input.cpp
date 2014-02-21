@@ -18,12 +18,8 @@
 #include "pce.h"
 #include "input.h"
 #include "huc.h"
-#ifndef WII
 #include "../movie.h"
-#endif
 #include "../endian.h"
-
-#include "Emulators.h"
 
 namespace PCE_Fast
 {
@@ -32,7 +28,7 @@ static int InputTypes[5];
 static uint8 *data_ptr[5];
 
 static bool AVPad6Which[5]; // Lower(8 buttons) or higher(4 buttons).
-bool AVPad6Enabled[5];
+static bool AVPad6Enabled[5];
 
 uint16 pce_jp_data[5];
 
@@ -78,15 +74,13 @@ void INPUT_Frame(void)
  {
   if(InputTypes[x] == 1)
   {
-    uint16 new_data = data_ptr[x][0] | (data_ptr[x][1] << 8);
+   uint16 new_data = data_ptr[x][0] | (data_ptr[x][1] << 8);
 
-#ifndef WII
    if((new_data & 0x1000) && !(pce_jp_data[x] & 0x1000))
    {
     AVPad6Enabled[x] = !AVPad6Enabled[x];
     MDFN_DispMessage("%d-button mode selected for pad %d", AVPad6Enabled[x] ? 6 : 2, x + 1);
    }
-#endif
 
    pce_jp_data[x] = new_data;
   }
@@ -293,6 +287,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "none",
   "none",
   NULL,
+  NULL,
   0,
   NULL
  },
@@ -301,6 +296,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
  {
   "gamepad",
   "Gamepad",
+  NULL,
   NULL,
   sizeof(GamepadIDII) / sizeof(InputDeviceInputInfoStruct),
   GamepadIDII,
@@ -311,6 +307,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "mouse",
   "Mouse",
   NULL,
+  NULL,
   sizeof(MouseIDII) / sizeof(InputDeviceInputInfoStruct),
   MouseIDII,
  },
@@ -319,11 +316,11 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
 
 static const InputPortInfoStruct PortInfo[] =
 {
- { 0, "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port3", "Port 3", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port4", "Port 4", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port5", "Port 5", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port3", "Port 3", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port4", "Port 4", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port5", "Port 5", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
 };
 
 InputInfoStruct PCEInputInfo =

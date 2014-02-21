@@ -26,16 +26,10 @@
 #include "../cdrom/cdromif.h"
 #include "../mempatcher.h"
 
-#include "wii_mednafen.h"
-
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 namespace PCE_Fast
 {
 
-static const char BRAM_Init_String[8] = { 'H', 'U', 'B', 'M', 0x00, 0x88, 0x10, 0x80 }; //"HUBM\x00\x88\x10\x80";
+static const uint8 BRAM_Init_String[8] = { 'H', 'U', 'B', 'M', 0x00, 0x88, 0x10, 0x80 }; //"HUBM\x00\x88\x10\x80";
 
 ArcadeCard *arcade_card = NULL;
 
@@ -130,17 +124,13 @@ int HuCLoad(const uint8 *data, uint32 len, uint32 crc32)
  MDFN_printf(_("ROM CRC32: 0x%04x\n"), crc32);
  MDFN_printf(_("ROM MD5:   0x%s\n"), md5_context::asciistr(MDFNGameInfo->MD5, 0).c_str());
 
-#ifdef MEM2
- if(!(HuCROM = (uint8 *)Mem2ManagerAlloc(m_len, _("HuCard ROM"))))
-#else
  if(!(HuCROM = (uint8 *)MDFN_malloc(m_len, _("HuCard ROM"))))
-#endif
  {
   return(0);
  }
 
  memset(HuCROM, 0xFF, m_len);
- memcpy(HuCROM, data, len);
+ memcpy(HuCROM, data, (m_len < len) ? m_len : len);
 
  memset(ROMSpace, 0xFF, 0x88 * 8192 + 8192);
 
@@ -200,9 +190,7 @@ int HuCLoad(const uint8 *data, uint32 len, uint32 crc32)
 
   if(!(TsushinRAM = (uint8*)MDFN_calloc(1, 0x8000 + 8192, _("Tsushin Booster RAM"))))	// + 8192 for PC-as-ptr safety padding
   {
-#ifndef MEM2
    MDFN_free(HuCROM);
-#endif
    return(0);
   }
   memset(TsushinRAM, 0xFF, 0x8000);
@@ -398,6 +386,7 @@ int HuC_StateAction(StateMem *sm, int load, int data_only)
 
  if(load)
   HuCSF2Latch &= 0x3;
+
  if(PCE_IsCD)
  {
   ret &= PCECD_StateAction(sm, load, data_only);
@@ -425,7 +414,7 @@ void HuCClose(void)
  }
  else if(IsBRAMUsed())
  {
-  MDFN_DumpToFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav").c_str(), 6, SaveRAM, 2048);
+  MDFN_DumpToFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav").c_str(), 0, SaveRAM, 2048);
  }
 
  if(arcade_card)
@@ -441,9 +430,7 @@ void HuCClose(void)
 
  if(HuCROM)
  {
-#ifndef MEM2
   MDFN_free(HuCROM);
-#endif
   HuCROM = NULL;
  }
 }

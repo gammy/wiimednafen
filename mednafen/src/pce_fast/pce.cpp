@@ -22,6 +22,7 @@
 #include "input.h"
 #include "huc.h"
 #include "../cdrom/pcecd.h"
+#include "../cdrom/scsicd.h"
 #include "hes.h"
 #include "tsushin.h"
 #include "arcade_card/arcade_card.h"
@@ -38,7 +39,7 @@ static Blip_Buffer sbuf[2];
 
 bool PCE_ACEnabled;
 
-bool IsSGX;
+static bool IsSGX;
 static bool IsHES;
 int pce_overclocked;
 
@@ -141,7 +142,11 @@ static DECLFW(IOWrite)
 		 arcade_card->Write(A & 0x1FFF, V);
 	       }
 	       else
-	        PCECD_Write(HuCPU.timestamp * 3, A, V); 
+	       {
+	        int32 dummy_ne;
+
+		dummy_ne = PCECD_Write(HuCPU.timestamp * 3, A, V);
+	       }
 	       break;
   //case 0x1C00: break; // Expansion
   //default: printf("Eep: %04x\n", A); break;
@@ -243,7 +248,7 @@ static int Load(const char *name, MDFNFILE *fp)
   IsSGX = 1;
  }
 
- if(crc == 0x8c4588e2 || crc == 0xd206e241)
+ if(crc == 0x8c4588e2)
  {
   MDFN_printf("SuperGfx:  1941 - Counter Attack\n");
   IsSGX = 1;
@@ -360,7 +365,7 @@ static int LoadCommon(void)
 
  if(!IsHES)
  {
-  MDFNGameInfo->nominal_width = MDFN_GetSettingB("pce_fast.correct_aspect") ? 320 : 341;
+  MDFNGameInfo->nominal_width = MDFN_GetSettingB("pce_fast.correct_aspect") ? 288 : 341;
   MDFNGameInfo->nominal_height = MDFN_GetSettingUI("pce_fast.slend") - MDFN_GetSettingUI("pce_fast.slstart") + 1;
 
   MDFNGameInfo->lcm_width = MDFN_GetSettingB("pce_fast.correct_aspect") ? 1024 : 341;
@@ -370,24 +375,25 @@ static int LoadCommon(void)
  return(1);
 }
 
-static bool TestMagicCD(void)
+static bool TestMagicCD(std::vector<CDIF *> *CDInterfaces)
 {
  static const uint8 magic_test[0x20] = { 0x82, 0xB1, 0x82, 0xCC, 0x83, 0x76, 0x83, 0x8D, 0x83, 0x4F, 0x83, 0x89, 0x83, 0x80, 0x82, 0xCC,
                                          0x92, 0x98, 0x8D, 0xEC, 0x8C, 0xA0, 0x82, 0xCD, 0x8A, 0x94, 0x8E, 0xAE, 0x89, 0xEF, 0x8E, 0xD0
                                        };
  uint8 sector_buffer[2048];
- CD_TOC toc;
+ CDIF *cdiface = (*CDInterfaces)[0];
+ CDUtility::TOC toc;
  bool ret = FALSE;
 
  memset(sector_buffer, 0, sizeof(sector_buffer));
 
- CDIF_ReadTOC(&toc);
+ cdiface->ReadTOC(&toc);
 
  for(int32 track = toc.first_track; track <= toc.last_track; track++)
  {
   if(toc.tracks[track].control & 0x4)
   {
-   CDIF_ReadSector(sector_buffer, toc.tracks[track].lba, 1);
+   cdiface->ReadSector(sector_buffer, toc.tracks[track].lba, 1);
 
    if(!memcmp((char*)sector_buffer, (char *)magic_test, 0x20))
     ret = TRUE;
@@ -404,7 +410,7 @@ static bool TestMagicCD(void)
  {
   if(toc.tracks[track].control & 0x4)
   {
-   CDIF_ReadSector(sector_buffer, toc.tracks[track].lba, 1);
+   cdiface->ReadSector(sector_buffer, toc.tracks[track].lba, 1);
    if(!strncmp("PC-FX:Hu_CD-ROM", (char*)sector_buffer, strlen("PC-FX:Hu_CD-ROM")))
    {
     return(false);
@@ -417,7 +423,7 @@ static bool TestMagicCD(void)
  // data track.
  if(toc.first_track == 1 && (toc.tracks[1].control & 0x4))
  {
-  if(CDIF_ReadSector(sector_buffer, 0x10, 1))
+  if(cdiface->ReadSector(sector_buffer, 0x10, 1))
   {
    if(!memcmp((char *)sector_buffer + 0x8, "HACKER CD ROM SYSTEM", 0x14))
    {
@@ -429,7 +435,7 @@ static bool TestMagicCD(void)
  return(ret);
 }
 
-static int LoadCD(void)
+static int LoadCD(std::vector<CDIF *> *CDInterfaces)
 {
  std::string bios_path = MDFN_MakeFName(MDFNMKF_FIRMWARE, 0, MDFN_GetSettingS("pce_fast.cdbios").c_str() );
 
@@ -440,6 +446,9 @@ static int LoadCD(void)
 
  if(!HuCLoadCD(bios_path.c_str()))
   return(0);
+
+ SCSICD_SetDisc(true, NULL, true);
+ SCSICD_SetDisc(false, (*CDInterfaces)[0], true);
 
  return(LoadCommon());
 }
@@ -467,6 +476,52 @@ static void Emulate(EmulateSpecStruct *espec)
 
  MDFNMP_ApplyPeriodicCheats();
 
+ #if 0
+ {
+  static bool firstcat = true;
+  MDFN_PixelFormat nf;
+
+  nf.bpp = 16;
+  nf.colorspace = MDFN_COLORSPACE_RGB;
+  nf.Rshift = 11;
+  nf.Gshift = 5;
+  nf.Bshift = 0;
+  nf.Ashift = 16;
+  
+  nf.Rprec = 5;
+  nf.Gprec = 6;
+  nf.Bprec = 5;
+  nf.Aprec = 8;
+
+  espec->surface->SetFormat(nf, false);
+  espec->VideoFormatChanged = firstcat;
+  firstcat = false;
+ }
+ #endif
+
+#if 0
+ static bool firstcat = true;
+
+ MDFN_PixelFormat tmp_pf;
+
+ tmp_pf.Rshift = 0;
+ tmp_pf.Gshift = 0;
+ tmp_pf.Bshift = 0;
+ tmp_pf.Ashift = 8;
+
+ tmp_pf.Rprec = 0;
+ tmp_pf.Gprec = 0;
+ tmp_pf.Bprec = 0;
+ tmp_pf.Aprec = 0;
+
+ tmp_pf.bpp = 8;
+ tmp_pf.colorspace = MDFN_COLORSPACE_RGB;
+
+ espec->surface->SetFormat(tmp_pf, false);
+ espec->VideoFormatChanged = firstcat;
+ firstcat = false;
+#endif
+
  if(espec->VideoFormatChanged)
   VDC_SetPixelFormat(espec->surface->format); //.Rshift, espec->surface->format.Gshift, espec->surface->format.Bshift);
 
@@ -482,7 +537,11 @@ static void Emulate(EmulateSpecStruct *espec)
  VDC_RunFrame(espec->surface, &espec->DisplayRect, espec->LineWidths, IsHES ? 1 : espec->skip);
 
  if(PCE_IsCD)
-  PCECD_Run(HuCPU.timestamp * 3);
+ {
+  int32 dummy_ne;
+
+  dummy_ne = PCECD_Run(HuCPU.timestamp * 3);
+ }
 
  psg->EndFrame(HuCPU.timestamp / pce_overclocked);
 
@@ -556,9 +615,13 @@ void PCE_Power(void)
  HuC_Power();
 
  if(PCE_IsCD)
-  PCECD_Power(HuCPU.timestamp * 3);
+ {
+  int32 dummy_ne;
+
+  dummy_ne = PCECD_Power(HuCPU.timestamp * 3);
+ }
 }
- 
+
 static void DoSimpleCommand(int cmd)
 {
  switch(cmd)
@@ -590,7 +653,7 @@ static MDFNSetting PCESettings[] =
   { "pce_fast.nospritelimit", MDFNSF_NOFLAGS, gettext_noop("Remove 16-sprites-per-scanline hardware limit."), NULL, MDFNST_BOOL, "0" },
 
   { "pce_fast.cdbios", MDFNSF_EMU_STATE, gettext_noop("Path to the CD BIOS"), NULL, MDFNST_STRING, "syscard3.pce" },
-  { "pce_fast.adpcmlp", MDFNSF_NOFLAGS, gettext_noop("Enable lowpass filter dependent on playback-frequency."), NULL, MDFNST_BOOL, "0" },
+  { "pce_fast.adpcmlp", MDFNSF_NOFLAGS, gettext_noop("Enable dynamic ADPCM lowpass filter."), NULL, MDFNST_BOOL, "0" },
   { "pce_fast.cdpsgvolume", MDFNSF_NOFLAGS, gettext_noop("PSG volume when playing a CD game."), NULL, MDFNST_UINT, "100", "0", "200" },
   { "pce_fast.cddavolume", MDFNSF_NOFLAGS, gettext_noop("CD-DA volume."), NULL, MDFNST_UINT, "100", "0", "200" },
   { "pce_fast.adpcmvolume", MDFNSF_NOFLAGS, gettext_noop("ADPCM volume."), NULL, MDFNST_UINT, "100", "0", "200" },
@@ -609,9 +672,9 @@ static const FileExtensionSpecStruct KnownExtensions[] =
  { ".sgx", gettext_noop("SuperGrafx ROM Image") },
  { NULL, NULL }
 };
- 
+
 };
- 
+
 MDFNGI EmulatedPCE_Fast =
 {
  "pce_fast",
@@ -625,11 +688,14 @@ MDFNGI EmulatedPCE_Fast =
  LoadCD,
  TestMagicCD,
  CloseGame,
- VDC_ToggleLayer,
+ VDC_SetLayerEnableMask,
+ NULL,
+ NULL,
  NULL,
  NULL,
  NULL,
  MemRead,
+ false,
  StateAction,
  Emulate,
  PCEINPUT_SetInput,
@@ -644,11 +710,11 @@ MDFNGI EmulatedPCE_Fast =
  0,   // lcm_height           
  NULL,  // Dummy
 
- 320,   // Nominal width 
+ 288,   // Nominal width
  232,   // Nominal height
 
  512,	// Framebuffer width
- 242,	// Framebuffer height 
+ 242,	// Framebuffer height
 
  2,     // Number of output sound channels
 };
