@@ -35,6 +35,8 @@
 #include "movie.h"
 #endif
 
+#include "md5.h"
+
 using namespace std;
 
 static string BaseDirectory;

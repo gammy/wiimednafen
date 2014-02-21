@@ -680,11 +680,15 @@ MDFNGI *MDFNI_LoadCD(const char *force_module, const char *devicename, const boo
  #endif
 
  MDFNSS_CheckStates();
+#ifndef WII
  MDFNMOV_CheckMovies();
+#endif
 
  MDFN_ResetMessages();   // Save state, status messages, etc.
 
+#ifndef WII
  TBlur_Init();
+#endif
 
  MDFN_StateEvilBegin();
 
@@ -896,7 +900,9 @@ MDFNGI *MDFNI_LoadGame(const char *force_module, const char *name)
 	#endif
 
 	MDFNSS_CheckStates();
+#ifndef WII
 	MDFNMOV_CheckMovies();
+#endif
 
 	MDFN_ResetMessages();	// Save state, status messages, etc.
 
@@ -1097,7 +1103,9 @@ bool MDFNI_InitializeModules(const std::vector<MDFNGI *> &ExternalSystems)
   &EmulatedGG,
   #endif
 
+#ifndef WII
   &EmulatedCDPlay
+#endif
  };
  std::string i_modules_string, e_modules_string;
 
@@ -1214,7 +1222,9 @@ int MDFNI_Initialize(const char *basedir, const std::vector<MDFNSetting> &Driver
 
 void MDFNI_Kill(void)
 {
+#ifndef WII
  MDFN_SaveSettings(settings_file_path.c_str());
+#endif
  MDFN_KillSettings();
 }
 
@@ -1235,7 +1245,7 @@ static void ProcessAudio(EmulateSpecStruct *espec)
   int32 SoundBufSize = espec->SoundBufSize - espec->SoundBufSizeALMS;
   const int32 SoundBufMaxSize = espec->SoundBufMaxSize - espec->SoundBufSizeALMS;
 
-
+#ifndef WII
   if(qtrecorder && (volume_save != 1 || multiplier_save != 1))
   {
    int32 orig_size = SoundBufPristine.size();
@@ -1244,6 +1254,7 @@ static void ProcessAudio(EmulateSpecStruct *espec)
    for(int i = 0; i < SoundBufSize * MDFNGameInfo->soundchan; i++)
     SoundBufPristine[orig_size + i] = SoundBuf[i];
   }
+#endif
 
   if(espec->NeedSoundReverse)
   {
@@ -1270,6 +1281,7 @@ static void ProcessAudio(EmulateSpecStruct *espec)
    }
   }
 
+#ifndef WII
   try
   {
    if(wavrecorder)
@@ -1281,6 +1293,7 @@ static void ProcessAudio(EmulateSpecStruct *espec)
    delete wavrecorder;
    wavrecorder = NULL;
   }
+#endif
 
   if(multiplier_save != LastSoundMultiplier)
   {
@@ -1377,16 +1390,20 @@ static void ProcessAudio(EmulateSpecStruct *espec)
 
 void MDFN_MidSync(EmulateSpecStruct *espec)
 {
+#ifndef WII
  if(MDFNnetplay)
   return;
+#endif
 
  ProcessAudio(espec);
 
  MDFND_MidSync(espec);
 
+#ifndef WII
  for(int x = 0; x < 16; x++)
   if(PortDataCache[x])
    MDFNMOV_AddJoy(PortDataCache[x], PortDataLenCache[x]);
+#endif
 
  espec->SoundBufSizeALMS = espec->SoundBufSize;
  espec->MasterCyclesALMS = espec->MasterCycles;
@@ -1427,6 +1444,7 @@ void MDFNI_Emulate(EmulateSpecStruct *espec)
 
  // We want to record movies without any dropped video frames and without fast-forwarding sound distortion and without custom volume.
  // The same goes for WAV recording(sans the dropped video frames bit :b).
+#ifndef WII
  if(qtrecorder || wavrecorder)
  {
   multiplier_save = espec->soundmultiplier;
@@ -1477,6 +1495,7 @@ void MDFNI_Emulate(EmulateSpecStruct *espec)
   espec->NeedSoundReverse = false;
  else
   espec->NeedSoundReverse = MDFN_StateEvil(espec->NeedRewind);
+#endif
 
  MDFNGameInfo->Emulate(espec);
 
@@ -1511,6 +1530,7 @@ void MDFNI_Emulate(EmulateSpecStruct *espec)
 
  ProcessAudio(espec);
 
+#ifndef WII
  if(qtrecorder)
  {
   int16 *sb_backup = espec->SoundBuf;
@@ -1541,6 +1561,7 @@ void MDFNI_Emulate(EmulateSpecStruct *espec)
 
  if(TBlur_IsOn())
   TBlur_Run(espec);
+#endif
 }
 
 // This function should only be called for state rewinding.
@@ -1673,6 +1694,7 @@ void MDFN_DoSimpleCommand(int cmd)
 
 void MDFN_QSimpleCommand(int cmd)
 {
+#ifndef WII
  if(MDFNnetplay)
   NetplaySendCommand(cmd, 0);
  else
@@ -1683,6 +1705,7 @@ void MDFN_QSimpleCommand(int cmd)
    MDFNMOV_AddCommand(cmd);
   }
  }
+#endif
 }
 
 void MDFNI_Power(void)

@@ -45,7 +45,6 @@ struct MDFN_Mutex;
 
 MDFN_Thread *MDFND_CreateThread(int (*fn)(void *), void *data);
 void MDFND_WaitThread(MDFN_Thread *thread, int *status);
-void MDFND_KillThread(MDFN_Thread *thread);
 
 MDFN_Mutex *MDFND_CreateMutex(void);
 void MDFND_DestroyMutex(MDFN_Mutex *mutex);
@@ -57,13 +56,15 @@ int MDFND_UnlockMutex(MDFN_Mutex *mutex);
 void MDFNI_Reset(void);
 void MDFNI_Power(void);
 
-/* Called from the physical CD disc reading code. */
-bool MDFND_ExitBlockingLoop(void);
+/* path = path of game/file to load.  returns NULL on failure. */
+MDFNGI *MDFNI_LoadGame(const char *force_module, const char *path);
 
-/* name=path and file to load.  returns NULL on failure. */
-MDFNGI *MDFNI_LoadGame(const char *force_module, const char *name);
+/* If is_device is false, "devicename" should be treated as a path in the filesystem.  If is_device is true, then it should
+   be treated as a device name(which on some OSes may be the same as a path in the filesystem).
 
-MDFNGI *MDFNI_LoadCD(const char *sysname, const char *devicename);
+   Additionally, if is_device is true, then devicename may be NULL to specify that the default CD drive device should be used.
+*/
+MDFNGI *MDFNI_LoadCD(const char *sysname, const char *devicename, const bool is_device);
 
 // Call this function as early as possible, even before MDFNI_Initialize()
 bool MDFNI_InitializeModules(const std::vector<MDFNGI *> &ExternalSystems);
@@ -72,8 +73,12 @@ bool MDFNI_InitializeModules(const std::vector<MDFNGI *> &ExternalSystems);
 /* Also pass it the base directory to load the configuration file. */
 int MDFNI_Initialize(const char *basedir, const std::vector<MDFNSetting> &DriverSettings);
 
+/* Sets the base directory(save states, snapshots, etc. are saved in directories
+   below this directory. */
+void MDFNI_SetBaseDirectory(const char *dir);
+
 /* Call only when a game is loaded. */
-int MDFNI_NetplayStart(uint32 local_players, uint32 netmerge, const std::string &nickname, const std::string &game_key, const std::string &connect_password);
+int MDFNI_NetplayStart(void);
 
 /* Emulates a frame. */
 void MDFNI_Emulate(EmulateSpecStruct *espec);
@@ -84,24 +89,21 @@ void MDFNI_CloseGame(void);
 /* Deallocates all allocated memory.  Call after MDFNI_Emulate() returns. */
 void MDFNI_Kill(void);
 
-/* Sets the base directory(save states, snapshots, etc. are saved in directories
-below this directory. */
-void MDFNI_SetBaseDirectory(const char *dir);
-
 void MDFN_DispMessage(const char *format, ...) throw() MDFN_FORMATSTR(printf, 1, 2);
 #define MDFNI_DispMessage MDFN_DispMessage
 
 uint32 MDFNI_CRC32(uint32 crc, uint8 *buf, uint32 len);
 
-int MDFNI_NSFChange(int amount);
-int MDFNI_NSFGetInfo(uint8 *name, uint8 *artist, uint8 *copyright, int maxlen);
-
+// NES hackish function.  Should abstract in the future.
 int MDFNI_DatachSet(const uint8 *rcode);
 
 void MDFNI_DoRewind(void);
 
-void MDFNI_ToggleLayer(int);
+void MDFNI_SetLayerEnableMask(uint64 mask);
 
+// Only call during startup or when the device on the specified port is changing/changed; do NOT call otherwise(such as on every frame),
+// as the call causes the destruction and recreation of the virtual device, which disrupts the game if it occurs in the middle of
+// the game's polling of the device.
 void MDFNI_SetInput(int port, const char *type, void *ptr, uint32 dsize);
 
 //int MDFNI_DiskInsert(int oride);
@@ -121,6 +123,33 @@ void MDFNI_DiskSelect();
 void MDFNI_DiskInsert();
 void MDFNI_DiskEject();
 
+// New removable media interface(TODO!)
+//
+#if 0
+
+struct MediumInfoStruct
+{
+ const char *name;		// More descriptive name, "Al Gore's Grand Adventure, Disk 1 of 7" ???
+				// (remember, Do utf8->utf32->utf8 for truncation for display)
+ const char *set_member_name;	// "Disk 1 of 4, Side A", "Disk 3 of 4, Side B", "Disc 2 of 5" ???? (Disk M of N, where N is related to the number of entries 
+				// in the structure???)
+};
+
+struct DriveInfoStruct
+{
+ const char *name;
+ const char *description;
+ const MediumInfoStruct *possible_media;
+ //bool 
+ //const char *eject_state_name;	// Like "Lid Open", or "Tray Ejected"
+ //const char *insert_state_name;	// Like "
+};
+
+ // Entry point
+ DriveInfoStruct *Drives;
+
+void MDFNI_SetDriveMedium(unsigned drive_index, unsigned int medium_index, unsigned state_id);
+#endif
 
 
 bool MDFNI_StartAVRecord(const char *path, double SoundRate);
