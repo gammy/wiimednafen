@@ -30,7 +30,9 @@ The spectrum peaked at 15734 Hz.  21477272.727272... / 3 / 15734 = 455.00(CPU cy
 #include "vdc.h"
 #include "huc.h"
 #include "../cdrom/pcecd.h"
+#ifndef WII
 #include "../cputest/cputest.h"
+#endif
 #include <trio/trio.h>
 #include <math.h>
 
@@ -1305,8 +1307,8 @@ void VDC_RunFrame(MDFN_Surface *surface, MDFN_Rect *DisplayRect, MDFN_Rect *Line
 
  if(!skip)
  {
-  if(surface->palette)
-   memcpy(surface->palette, PalTest, sizeof(PalTest));
+  //if(surface->palette)
+  // memcpy(surface->palette, PalTest, sizeof(PalTest));
 
   DisplayRect->x = 0;
   DisplayRect->w = 256;

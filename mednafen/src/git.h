@@ -260,6 +260,8 @@ typedef enum
   MODPRIO_EXTERNAL_HIGH = 40
 } ModPrio;
 
+class CDIF;
+
 typedef struct
 {
   /* Private functions to Mednafen.  Do not call directly
