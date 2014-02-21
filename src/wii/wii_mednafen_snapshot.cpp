@@ -137,7 +137,7 @@ BOOL wii_start_snapshot()
   if( !succeeded )
   {
     wii_set_status_message(
-      "Error loading the specified save state file." );                
+      "Poo: Error loading the specified save state file: " );                
   }
   else
   {

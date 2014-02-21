@@ -12,7 +12,8 @@ Modified by Tantric, 2009
 #include <stdio.h>
 #include <malloc.h>
 #include "pngu.h"
-#include "png/png.h"
+//#include "png/png.h"
+#include "png.h"
 
 
 // Constants

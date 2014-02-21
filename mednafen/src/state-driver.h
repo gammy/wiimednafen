@@ -6,6 +6,10 @@
 
 StateStatusStruct* MDFNI_SelectState(int);
 
+//void MDFNI_SelectState(int w);
+//void MDFNI_SaveState(const char *fname, const char *suffix, const MDFN_Surface *surface, const MDFN_Rect *DisplayRect, const MDFN_Rect *LineWidths);
+//void MDFNI_LoadState(const char *fname, const char *suffix);
+
 /* "fname" overrides the default save state filename code if non-NULL. */
 /* If suffix is set, just override the default suffix(nc0-nc9) */
 int MDFNI_SaveState(const char *fname, const char *suffix, const MDFN_Surface *surface, const MDFN_Rect *DisplayRect, const MDFN_Rect *LineWidths);

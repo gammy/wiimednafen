@@ -146,9 +146,8 @@ CFLAGS	= \
   -DNES_BPP=16 \
   -DPCFX_BPP=16 \
   -DMD_BPP=16 \
-  -DPLAYER_BPP=16
-  
-#  -DWII_NETTRACE
+  -DPLAYER_BPP=16 \
+  -DWII_NETTRACE
 #  -DTRACK_UNIQUE_MSGIDS  
 #  -DUSB_WIILOAD \
 #  -DC68K_GEN    
@@ -160,7 +159,8 @@ LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:=	-ltinysmb -lSDL -lfat -lwiiuse -lbte -logc -lm -lpng -lfreetype -lz 
+#LIBS	:=	-ltinysmb -lSDL -lfat -lwiiuse -lbte -logc -lm -lpng -lfreetype -lz 
+LIBS	:=	-ltinysmb -lSDL -lwiikeyboard -lfat -lwiiuse -lbte -logc -lm -lpng -lfreetype -lz
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -204,16 +204,19 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 #---------------------------------------------------------------------------------
 # build a list of include paths
 #---------------------------------------------------------------------------------
+# SDL path and PORTLIBS changed/added by gammy
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 					-I$(CURDIR)/$(BUILD) \
-					-I$(LIBOGC_INC) -I$(LIBOGC_INC)/sdl
+					-I$(LIBOGC_INC) -I$(LIBOGC_INC)/SDL \
+					-I$(PORTLIBS)/include
 
 #---------------------------------------------------------------------------------
 # build a list of library paths
 #---------------------------------------------------------------------------------
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
-					-L$(LIBOGC_LIB) -I$(LIBOGC_LIB)/sdl
+					-L$(LIBOGC_LIB) -I$(LIBOGC_LIB)/SDL \
+					-L$(PORTLIBS)/lib
 
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
@@ -222,6 +225,7 @@ export OUTPUT	:=	$(CURDIR)/$(TARGET)
 #---------------------------------------------------------------------------------
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
+	@echo ${CFLAGS}
 	@make --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #---------------------------------------------------------------------------------

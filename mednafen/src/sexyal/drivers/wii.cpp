@@ -14,7 +14,8 @@
 
 #include <gccore.h>
 #include <string.h>
-#include <sdl.h>
+//#include <sdl.h>
+#include <SDL.h>
 
 #define SAMPLERATE 48000  
 

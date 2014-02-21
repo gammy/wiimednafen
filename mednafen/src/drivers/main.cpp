@@ -1680,14 +1680,17 @@ void MDFND_Update(MDFN_Surface *surface, int16 *Buffer, int Count)
 
 void MDFND_DispMessage(UTF8 *text)
 {
+
 #ifndef WII
-  SendCEvent(CEVT_DISP_MESSAGE, text, NULL);
+	  SendCEvent(CEVT_DISP_MESSAGE, text, NULL);
 #else
-#ifdef WII_NETTRACE
-  if( text )
-    net_print_string( NULL, 0, "%s", text );
-#endif
-  if( text) free(text);
+	#ifdef WII_NETTRACE
+	  if( text )
+	    net_print_string( NULL, 0, "%s", text );
+	#endif
+	
+
+	  if( text) free(text);
 #endif
 }
 
