@@ -25,23 +25,11 @@
 #endif
 
 #include <sys/types.h>
-
-#ifdef __MINGW32__
-
 #include <inttypes.h>
 
 typedef uint32_t u_int32_t;
 typedef uint16_t u_int16_t;
 typedef uint8_t u_int8_t;
-
-#endif
-
-#ifdef WII
-#include <gctypes.h>
-#define u_int32_t u32
-#define u_int16_t u16
-#define u_int8_t u8
-#endif
 
 #ifndef TRUE
 #define TRUE 1

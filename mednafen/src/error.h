@@ -6,65 +6,68 @@
 #include <exception>
 
 #ifdef __cplusplus
+
+class ErrnoHolder;
 class MDFN_Error : public std::exception
 {
-public:
+ public:
 
-  MDFN_Error() throw();
+ MDFN_Error() throw();
 
-  MDFN_Error(int errno_code_new, const char *format, ...) throw();
+ MDFN_Error(int errno_code_new, const char *format, ...) throw();
+ MDFN_Error(const ErrnoHolder &enh);
 
-  ~MDFN_Error() throw();
+ ~MDFN_Error() throw();
 
-  MDFN_Error(const MDFN_Error &ze_error) throw();
-  MDFN_Error & operator=(const MDFN_Error &ze_error) throw();
+ MDFN_Error(const MDFN_Error &ze_error) throw();
+ MDFN_Error & operator=(const MDFN_Error &ze_error) throw();
 
-  virtual const char *what(void) const throw();
-  int GetErrno(void) throw();
+ virtual const char *what(void) const throw();
+ int GetErrno(void) const throw();
 
-private:
+ private:
 
-  int errno_code;
-  char *error_message;
+ int errno_code;
+ char *error_message;
 };
 
 class ErrnoHolder
 {
-public:
+ public:
 
-  ErrnoHolder()
-  {
-    //SetErrno(0);
-    local_errno = 0;
-    local_strerror[0] = 0;
-  }
+ ErrnoHolder()
+ {
+  //SetErrno(0);
+  local_errno = 0;
+  local_strerror[0] = 0;
+ }
 
-  ErrnoHolder(int the_errno)
-  {
-    SetErrno(the_errno);
-  }
+ ErrnoHolder(int the_errno)
+ {
+  SetErrno(the_errno);
+ }
 
-  inline int Errno(void)
-  {
-    return(local_errno);
-  }
+ inline int Errno(void) const
+ {
+  return(local_errno);
+ }
 
-  const char *StrError(void)
-  {
-    return(local_strerror);
-  }
+ const char *StrError(void) const
+ {
+  return(local_strerror);
+ }
 
-  void operator=(int the_errno)
-  {
-    SetErrno(the_errno);
-  }
+ void operator=(int the_errno)
+ {
+  SetErrno(the_errno);
+ }
 
-private:
+ private:
 
-  void SetErrno(int the_errno);
+ void SetErrno(int the_errno);
 
-  int local_errno;
-  char local_strerror[256];
+ int local_errno;
+ char local_strerror[256];
 };
 
 #endif

@@ -1,50 +1,70 @@
-/******************************************************************************
-	[CdromInterface.h]
+/* Mednafen - Multi-system Emulator
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
-	CD-ROM デバイスを操作するためのインタフェイスを定義します。
-	Define interface for controlling CD-ROM device.
+#ifndef __MDFN_CDROM_CDROMIF_H
+#define __MDFN_CDROM_CDROMIF_H
 
-	Copyright (C) 2004 Ki
+#include "CDUtility.h"
+#include "../Stream.h"
 
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
+#include <queue>
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-******************************************************************************/
-#ifndef CDROM_INTERFACE_H_INCLUDED
-#define CDROM_INTERFACE_H_INCLUDED
+typedef CDUtility::TOC CD_TOC;
 
-#include "cdromfile-stuff.h"
+class CDIF
+{
+ public:
 
-bool CDIF_Open(const char *device_name);
-bool CDIF_Close(void);
+ CDIF();
+ virtual ~CDIF();
 
-// Basic functions
-bool CDIF_ReadTOC(CD_TOC *toc);
+ inline void ReadTOC(CDUtility::TOC *read_target)
+ {
+  *read_target = disc_toc;
+ }
 
-// lba_end is NOT inclusive.  IE for a count of 1, lba_end will be lba + 1.
-// Passing ~0U for "lba_end" is equivalent to passing the LBA of the leadout track.
-bool CDIF_HintReadSector(uint32 lba);
-bool CDIF_ReadRawSector(uint8 *buf, uint32 lba);
+ virtual void HintReadSector(uint32 lba) = 0;
+ virtual bool ReadRawSector(uint8 *buf, uint32 lba) = 0;
 
-// Call for mode 1 or mode 2 form 1 only.
-// Will only evaluate checksum and L-EC data if cdrom.lec_eval setting is true(the default), or the disc is real/physical.
-bool CDIF_ValidateRawSector(uint8 *buf);
+ // Call for mode 1 or mode 2 form 1 only.
+ bool ValidateRawSector(uint8 *buf);
 
-// Utility/Wrapped functions
-bool CDIF_ReadSector(uint8* pBuf, uint32 sector, uint32 nSectors);
+ // Utility/Wrapped functions
+ // Reads mode 1 and mode2 form 1 sectors(2048 bytes per sector returned)
+ // Will return the type(1, 2) of the first sector read to the buffer supplied, 0 on error
+ int ReadSector(uint8* pBuf, uint32 lba, uint32 nSectors);
 
-uint32 CDIF_GetTrackStartPositionLBA(int32 track);
-int CDIF_FindTrackByLBA(uint32 LBA);
+ // Return true if operation succeeded or it was a NOP(either due to not being implemented, or the current status matches eject_status).
+ // Returns false on failure(usually drive error of some kind; not completely fatal, can try again).
+ virtual bool Eject(bool eject_status) = 0;
 
-uint32 CDIF_GetTrackSectorCount(int32 track);
+ inline bool IsPhysical(void) { return(is_phys_cache); }
 
-bool CDIF_CheckSubQChecksum(uint8 *SubQBuf);
+ // For Mode 1, or Mode 2 Form 1.
+ // No reference counting or whatever is done, so if you destroy the CDIF object before you destroy the returned Stream, things will go BOOM.
+ Stream *MakeStream(uint32 lba, uint32 sector_count);
 
-#endif /* CDROM_INTERFACE_H_INCLUDED */
+ protected:
+ bool UnrecoverableError;
+ bool is_phys_cache;
+ CDUtility::TOC disc_toc;
+ bool DiscEjected;
+};
 
+CDIF *CDIF_Open(const char *path, const bool is_device, bool image_memcache);
+
+#endif
