@@ -25,8 +25,7 @@
 #include "cart.h"
 #include "nsf.h"
 #include "fds-sound.h"
-
-#include "wii_mednafen_main.h"
+#include "../FileStream.h"
 
 /*	TODO:  Add code to put a delay in between the time a disk is inserted
 	and the when it can be successfully read/written to.  This should
@@ -69,7 +68,7 @@ static uint8 *diskdatao[8]={0,0,0,0,0,0,0,0};
 static uint8 *diskdata[8]={0,0,0,0,0,0,0,0};
 
 static unsigned int TotalSides;
-static uint8 DiskWritten=0;		/* Set to 1 if disk was written to. */
+static bool DiskWritten;		/* Set to 1 if disk was written to. */
 static uint8 writeskip;
 static uint32 DiskPtr;
 static int32 DiskSeekIRQ;
@@ -83,16 +82,7 @@ int FDS_DiskInsert(int oride)
 {
 	if(InDisk==255)
         {
-#ifdef WII
-          {
-            char message[512] = "";
-            snprintf( message, sizeof(message), 
-              "Disk %d side %s inserted.",SelectDisk>>1,(SelectDisk&1)?"B":"A" );
-            wii_mednafen_set_message( message );
-          }
-#else
          MDFN_DispMessage(_("Disk %1$d Side %2$s Inserted"),SelectDisk>>1,(SelectDisk&1)?"B":"A");  
-#endif
          InDisk=SelectDisk;
         }
         else   
@@ -268,7 +258,7 @@ static DECLFW(FDSWrite)
           if(writeskip) writeskip--;
           else if(DiskPtr>=2)
           {
-	   DiskWritten=1;
+	   DiskWritten = true;
            diskdata[InDisk][DiskPtr-2]=V;
           }
          }
@@ -306,43 +296,40 @@ static DECLFW(FDSWrite)
 
 static void FreeFDSMemory(void)
 {
-  unsigned int x;
-  for(x=0;x<TotalSides;x++)
-    if(diskdata[x])
-    {
-      MDFN_free(diskdata[x]);
-      diskdata[x]=0;
-    }
-
-#ifdef WII
-  for(x=0;x<TotalSides;x++)
-    if(diskdatao[x])
-    { 
-      MDFN_free(diskdatao[x]);
-      diskdatao[x]=0;
-    }
-
-  if(FDSRAM)
+ for(unsigned int x = 0; x < TotalSides; x++)
+ {
+  if(diskdata[x])
   {
-    MDFN_free(FDSRAM);
-    FDSRAM=NULL;
+   MDFN_free(diskdata[x]);
+   diskdata[x] = NULL;
   }
 
-  if(CHRRAM)
+  if(diskdatao[x])
   {
-    MDFN_free(CHRRAM);
-    CHRRAM=NULL;
+   MDFN_free(diskdatao[x]);
+   diskdatao[x] = NULL;
   }
-#endif
+ }
+
+ if(FDSRAM)
+ {
+  MDFN_free(FDSRAM);
+  FDSRAM = NULL;
+ }
+
+ if(CHRRAM)
+ {
+  MDFN_free(CHRRAM);
+  CHRRAM = NULL;
+ }
 }
 
 static int SubLoad(MDFNFILE *fp)
 {
  uint8 header[16];
- unsigned int x;
 
  fp->fread(header, 16, 1);
- 
+
  if(memcmp(header,"FDS\x1a",4))
  {
   if(!(memcmp(header+1,"*NINTENDO-HVC*",14)))
@@ -360,22 +347,20 @@ static int SubLoad(MDFNFILE *fp)
   }
   else
    return(FALSE);
- } 
+ }
  else
   TotalSides=header[4];
 
- if(TotalSides>8) TotalSides=8;
- if(TotalSides<1) TotalSides=1;
+ if(TotalSides > 8) TotalSides=8;
+ if(TotalSides < 1) TotalSides=1;
 
- for(x=0;x<TotalSides;x++)
+ for(unsigned int x = 0; x < TotalSides; x++)
  {
-  diskdata[x]=(uint8 *)MDFN_malloc(65500, _("FDS Disk Data"));
+  diskdata[x] = (uint8 *)MDFN_malloc(65500, _("FDS Disk Data"));
+
   if(!diskdata[x])
   {
-   unsigned int zol;
-   for(zol=0;zol<x;zol++)
-    MDFN_free(diskdata[zol]);
-   return 0;
+   return(0);
   }
   fp->fread(diskdata[x], 1, 65500);
  }
@@ -637,12 +622,15 @@ bool FDSLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
  fp->rewind();
 
  if(!SubLoad(fp))
+ {
+  FreeFDSMemory();
   return(FALSE);
-   
+ }
+
  md5_context md5;
  md5.starts();
 
- for(int x = 0; x < TotalSides; x++)
+ for(unsigned int x = 0; x < TotalSides; x++)
  {
   md5.update(diskdata[x],65500);
 
@@ -688,38 +676,40 @@ bool FDSLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
 
  if(!(FDSRAM = (uint8*)MDFN_malloc(32768, _("FDS RAM"))))
  {
+  FreeFDSMemory();
   return(0);
  }
 
  if(!(CHRRAM = (uint8*)MDFN_malloc(8192, _("CHR RAM"))))
  {
+  FreeFDSMemory();
   return(0);
  }
 
+ DiskWritten = false;
 
  {
   MDFNFILE tp;
 
   if(tp.Open(MDFN_MakeFName(MDFNMKF_SAV, 0, "fds").c_str(), NULL, _("auxillary FDS data")))
   {
-#ifndef WII
-   FreeFDSMemory();
-#else
-   unsigned int x;
-   for(x=0;x<TotalSides;x++)
-     if(diskdata[x])
-     {
-       MDFN_free(diskdata[x]);
-       diskdata[x]=0;
-     }
-#endif
+   for(unsigned int x = 0; x < TotalSides; x++)
+   {
+    if(diskdata[x])
+    {
+     MDFN_free(diskdata[x]);
+     diskdata[x] = NULL;
+    }
+   }
+
    if(!SubLoad(&tp))
    {
     MDFN_PrintError("Error reading auxillary FDS file.");
+    FreeFDSMemory();
     return(0);
    }
    tp.Close();
-   DiskWritten = 1;	/* For save state handling. */
+   DiskWritten = true;	/* For save state handling. */
   }
  }
 
@@ -748,47 +738,27 @@ bool FDSLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
 
 void FDSClose(void)
 {
- FILE *fp;
- unsigned int x;
-
- if(!DiskWritten) 
+ if(DiskWritten)
  {
-#ifdef WII
-   FreeFDSMemory();
-#endif
-   return;
- }
-
- if(!(fp=fopen(MDFN_MakeFName(MDFNMKF_SAV, 0, "fds").c_str(),"wb")))
- {
-#ifdef WII
-  FreeFDSMemory();
-#endif
-  return;
- }
-
- for(x=0;x<TotalSides;x++)
- {
-  if(fwrite(diskdata[x],1,65500,fp)!=65500) 
+  try
   {
-   MDFN_PrintError("Error saving FDS image!");
-#ifdef WII
-   FreeFDSMemory();
-#endif
-   fclose(fp);
-   return;
+   FileStream fp(MDFN_MakeFName(MDFNMKF_SAV, 0, "fds").c_str(), FileStream::MODE_WRITE);
+
+   for(unsigned int x = 0; x < TotalSides; x++)
+    fp.write(diskdata[x], 65500);
+  }
+  catch(std::exception &e)
+  {
+   MDFN_PrintError("Error saving FDS image: %s", e.what());
   }
  }
+
  FreeFDSMemory();
- fclose(fp);
 }
+
 
 static void FDSInit(void)
 {
- setprg8r(0, 0xe000, 0);          // BIOS
- setprg32r(1, 0x6000, 0);         // 32KB RAM
- setchr8(0);			  // 8KB CHR RAM
-
  MapIRQHook = FDSFix;
 
  SetReadHandler(0x4030, 0x4030, FDSRead4030);
@@ -807,6 +777,10 @@ static void FDSInit(void)
 
 static void FDSPower(void)
 {
+ setprg8r(0, 0xe000, 0);          // BIOS
+ setprg32r(1, 0x6000, 0);         // 32KB RAM
+ setchr8(0);                      // 8KB CHR RAM
+
  writeskip=DiskPtr=DiskSeekIRQ=0;
 
  Control = 0;

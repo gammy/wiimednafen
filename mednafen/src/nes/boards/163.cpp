@@ -161,7 +161,7 @@ static void Close(void)
 {
  if(WRAM)
  {
-  MDFN_free(WRAM);
+  free(WRAM);
   WRAM = NULL;
  }
 }
@@ -175,7 +175,7 @@ int Mapper163_Init(CartInfo *info)
  GameHBIRQHook2 = Mapper163_HB;
 
 
- if(!(WRAM = (uint8 *)MDFN_malloc(8192,"WRAM")))
+ if(!(WRAM = (uint8 *)malloc(8192)))
  {
   return(0);
  }

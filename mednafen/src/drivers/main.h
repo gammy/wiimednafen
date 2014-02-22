@@ -1,25 +1,6 @@
-/* Mednafen - NES/Famicom Emulator
-*
-* Copyright notice for this file:
-*  Copyright (C) 2002 Xodnizel
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
-
 #ifndef _DRIVERS_MAIN_H
 #define _DRIVERS_MAIN_H
+
 #include "../driver.h"
 #include "../mednafen.h"
 #include "../settings.h"
@@ -52,14 +33,12 @@
 #define CEVT_WANT_EXIT		0x80 // Emulator exit or GUI exit or bust!
 
 
-#define CEVT_NP_TEXT_TO_SERVER	0x100
 #define CEVT_NP_DISPLAY_TEXT	0x101
-#define CEVT_NP_TOGGLE_VIEWABLE	0x102
 #define CEVT_NP_TOGGLE_TT	0x103
-#define CEVT_NP_CONNECT		0x104
-#define CEVT_NP_SETNICK		0x105
-#define CEVT_NP_PING		0x106
-#define CEVT_NP_INTEGRITY	0x107
+#define CEVT_NP_LINE            0x180
+#define CEVT_NP_LINE_RESPONSE   0x181
+
+#define CEVT_SET_INPUT_FOCUS	0x1000	// Main thread to game thread.
 
 void SendCEvent(unsigned int code, void *data1, void *data2);
 
@@ -68,18 +47,16 @@ void PauseGameLoop(bool p);
 void SDL_MDFN_ShowCursor(int toggle);
 
 extern int NoWaiting;
+extern bool MDFNDHaveFocus;
 
 extern MDFNGI *CurGame;
 int CloseGame(void);
 
 void RefreshThrottleFPS(double);
 void PumpWrap(void);
-void SetJoyReadMode(int mode);
-void MainSetEventHook(int (*eh)(const SDL_Event *event));
-
 void MainRequestExit(void);
 
-extern bool pending_save_state, pending_snapshot, pending_save_movie;
+extern bool pending_save_state, pending_ssnapshot, pending_snapshot, pending_save_movie;
 
 void DoRunNormal(void);
 void DoFrameAdvance(void);

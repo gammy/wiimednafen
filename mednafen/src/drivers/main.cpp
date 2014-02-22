@@ -1,19 +1,19 @@
 /* Mednafen - Multi-system Emulator
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "main.h"
 
@@ -35,13 +35,18 @@
 #include <pwd.h>
 #endif
 
+#ifdef HAVE_LIBCDIO
+#include <cdio/version.h>
+#endif
+
+#include "fps.h"
+#include <math.h>
+
 #include "input.h"
-#include "joystick.h"
+#include "Joystick.h"
 #include "video.h"
 #include "sound.h"
-#include "fps.h"
 #include "ers.h"
-#include <math.h>
 
 #ifndef WII
 #include <strings.h>
@@ -53,135 +58,162 @@
 #include "cheat.h"
 #include "opengl.h"
 #include "video-state.h"
+#include "shader.h" // FIXME WIIFIX Should this be here?
+#include "help.h"   // FIXME WIIFIX Should this be here?
 #else
 #include "wii_app.h"
 #include "wii_sdl.h"
 #include "wii_mednafen.h"
 #include "Emulators.h"
-#endif
-
 #ifdef WII_NETTRACE
 #include <network.h>
 #include "net_print.h"  
 #endif
+#endif
 
+JoystickManager *joy_manager = NULL;
+bool MDFNDHaveFocus;
 static bool RemoteOn = FALSE;
-bool pending_save_state, pending_snapshot, pending_save_movie;
+bool pending_save_state, pending_snapshot, pending_ssnapshot, pending_save_movie;
 #ifndef WII
-static volatile Uint32 MainThreadID = 0;
+static Uint32 volatile MainThreadID = 0;
 #else
-volatile Uint32 MainThreadID = 0;
+volatile Uint32 MainThreadId = 0;
 #endif
 static bool ffnosound;
 
 static const char *CSD_xres = gettext_noop("Full-screen horizontal resolution.");
 static const char *CSD_yres = gettext_noop("Full-screen vertical resolution.");
-static const char *CSD_xscale = gettext_noop("Scaling factor for the X axis.");
-static const char *CSD_yscale = gettext_noop("Scaling factor for the Y axis.");
+static const char *CSDE_xres = gettext_noop("A value of \"0\" will cause the desktop horizontal resolution to be used.");
+static const char *CSDE_yres = gettext_noop("A value of \"0\" will cause the desktop vertical resolution to be used.");
+
+static const char *CSD_xscale = gettext_noop("Scaling factor for the X axis in windowed mode.");
+static const char *CSD_yscale = gettext_noop("Scaling factor for the Y axis in windowed mode.");
+
 static const char *CSD_xscalefs = gettext_noop("Scaling factor for the X axis in fullscreen mode.");
 static const char *CSD_yscalefs = gettext_noop("Scaling factor for the Y axis in fullscreen mode.");
+static const char *CSDE_xyscalefs = gettext_noop("For this settings to have any effect, the \"<system>.stretch\" setting must be set to \"0\".");
 
 static const char *CSD_scanlines = gettext_noop("Enable scanlines with specified opacity.");
 static const char *CSDE_scanlines = gettext_noop("Opacity is specified in %; IE a value of \"100\" will give entirely black scanlines.");
 
 static const char *CSD_stretch = gettext_noop("Stretch to fill screen.");
-static const char *CSD_videoip = gettext_noop("Enable bilinear interpolation.");
+static const char *CSD_videoip = gettext_noop("Enable (bi)linear interpolation.");
+
 
 static const char *CSD_special = gettext_noop("Enable specified special video scaler.");
 static const char *CSDE_special = gettext_noop("The destination rectangle is NOT altered by this setting, so if you have xscale and yscale set to \"2\", and try to use a 3x scaling filter like hq3x, the image is not going to look that great. The nearest-neighbor scalers are intended for use with bilinear interpolation enabled, at high resolutions(such as 1280x1024; nn2x(or nny2x) + bilinear interpolation + fullscreen stretching at this resolution looks quite nice).");
 
 static const char *CSD_pixshader = gettext_noop("Enable specified OpenGL pixel shader.");
-static const char *CSDE_pixshader = gettext_noop("Obviously, this will only work with the OpenGL \"video.driver\" setting, and only on cards and OpenGL implementations that support pixel shaders, otherwise you will get a black screen, or Mednafen may display an error message when starting up. Bilinear interpolation is disabled with pixel shaders, and any interpolation, if present, will be noted in the description of each pixel shader.");
+static const char *CSDE_pixshader = gettext_noop("Obviously, this will only work with the OpenGL \"video.driver\" setting, and only on cards and OpenGL implementations that support pixel shaders, otherwise you will get a black screen, or Mednafen may display an error message when starting up. Bilinear interpolation is disabled with pixel shaders, and any interpolation, if present, will be noted in the description of each pixel shader.\n\nNote: Mednafen's pixel shaders do not work properly on some AMD graphics cards(there is a diagonal line of distortion) for an unknown reason, possibly a hardware bug.");
 
 static MDFNSetting_EnumList VDriver_List[] =
 {
-  // Legacy:
-  { "0", VDRIVER_OPENGL },
-  { "1", VDRIVER_SOFTSDL },
+ // Legacy:
+ { "0", VDRIVER_OPENGL },
+ { "1", VDRIVER_SOFTSDL },
 
 
-  { "opengl", VDRIVER_OPENGL, "OpenGL + SDL", gettext_noop("This output method is preferred, as all features are available with it.") },
-  { "sdl", VDRIVER_SOFTSDL, "SDL Surface", gettext_noop("Slower with lower-quality scaling than OpenGL, but if you don't have hardware-accelerated OpenGL rendering, it will be faster than software OpenGL rendering. Bilinear interpolation not available. Pixel shaders do not work with this output method, of course.") },
-  { "overlay", VDRIVER_OVERLAY, "SDL Overlay", gettext_noop("As fast as OpenGL, perhaps faster in some situations, *if* it's hardware-accelerated. Scanline effects are not available. hq2x, hq3x, hq4x are not available. The OSD may be missing or glitchy. Bilinear interpolation can't be turned off. Harsh chroma subsampling blurring in some picture types.  If you use this output method, it is strongly recommended to use a special scaler with it, such as nn2x.") },
+ { "opengl", VDRIVER_OPENGL, "OpenGL + SDL", gettext_noop("This output method is preferred, as all features are available with it.") },
+ { "sdl", VDRIVER_SOFTSDL, "SDL Surface", gettext_noop("Slower with lower-quality scaling than OpenGL, but if you don't have hardware-accelerated OpenGL rendering, it will be faster than software OpenGL rendering. Bilinear interpolation not available. Pixel shaders do not work with this output method, of course.") },
+ { "overlay", VDRIVER_OVERLAY, "SDL Overlay", gettext_noop("As fast as OpenGL, perhaps faster in some situations, *if* it's hardware-accelerated. Scanline effects are not available. hq2x, hq3x, hq4x are not available. The OSD may be missing or glitchy. Bilinear interpolation can't be turned off. Harsh chroma subsampling blurring in some picture types.  If you use this output method, it is strongly recommended to use a special scaler with it, such as nn2x.") },
 
-  { NULL, 0 },
+ { NULL, 0 },
 };
 
 static MDFNSetting_EnumList SDriver_List[] =
 {
-  { "default", -1, "Default", gettext_noop("Default sound driver.") },
+ { "default", -1, "Default", gettext_noop("Default sound driver.") },
 
-  { "alsa", -1, "ALSA", gettext_noop("A recommended driver, and the default for Linux(if available).") },
-  { "oss", -1, "Open Sound System", gettext_noop("A recommended driver, and the default for non-Linux UN*X/POSIX/BSD systems, or anywhere ALSA is unavailable. If the ALSA driver gives you problems, you can try using this one instead.\n\nIf you are using OSSv4 or newer, you should edit \"/usr/lib/oss/conf/osscore.conf\", uncomment the max_intrate= line, and change the value from 100(default) to 1000(or higher if you know what you're doing), and restart OSS. Otherwise, performance will be poor, and the sound buffer size in Mednafen will be orders of magnitude larger than specified.\n\nIf the sound buffer size is still excessively larger than what is specified via the \"sound.buffer_time\" setting, you can try setting \"sound.period_time\" to 2666, and as a last resort, 5333, to work around a design flaw/limitation/choice in the OSS API and OSS implementation.") },
-  { "dsound", -1, "DirectSound", gettext_noop("A recommended driver, and the default for Microsoft Windows.") },
-  { "sdl", -1, "Simple Directmedia Layer", gettext_noop("This driver is not recommended, but it serves as a backup driver if the others aren't available. Its performance is generally sub-par, requiring higher latency or faster CPUs/SMP for glitch-free playback, except where the OS provides a sound callback API itself, such as with Mac OS X and BeOS.") },
+ { "alsa", -1, "ALSA", gettext_noop("A recommended driver, and the default for Linux(if available).") },
+ { "oss", -1, "Open Sound System", gettext_noop("A recommended driver, and the default for non-Linux UN*X/POSIX/BSD systems, or anywhere ALSA is unavailable. If the ALSA driver gives you problems, you can try using this one instead.\n\nIf you are using OSSv4 or newer, you should edit \"/usr/lib/oss/conf/osscore.conf\", uncomment the max_intrate= line, and change the value from 100(default) to 1000(or higher if you know what you're doing), and restart OSS. Otherwise, performance will be poor, and the sound buffer size in Mednafen will be orders of magnitude larger than specified.\n\nIf the sound buffer size is still excessively larger than what is specified via the \"sound.buffer_time\" setting, you can try setting \"sound.period_time\" to 2666, and as a last resort, 5333, to work around a design flaw/limitation/choice in the OSS API and OSS implementation.") },
+ { "dsound", -1, "DirectSound", gettext_noop("A recommended driver, and the default for Microsoft Windows.") },
+ { "wasapi", -1, "WASAPI", gettext_noop("Experimental exclusive-mode WASAPI driver, usable on Windows Vista and newer.  Use it for lower-latency sound(though you'll of course need to lower the sound.buffer_time setting to take full advantage of it).  May not work properly on all sound cards.") },
+
+ { "sdl", -1, "Simple Directmedia Layer", gettext_noop("This driver is not recommended, but it serves as a backup driver if the others aren't available. Its performance is generally sub-par, requiring higher latency or faster CPUs/SMP for glitch-free playback, except where the OS provides a sound callback API itself, such as with Mac OS X and BeOS.") },
 #ifdef WII
   { "wii", -1, "Wii Native Audio", gettext_noop("Wii native audio driver.") },
 #endif
-  { "jack", -1, "JACK", gettext_noop("Somewhat experimental driver, unusably buggy until Mednafen 0.8.C. The \"sound.buffer_time\" setting controls the size of the local sound buffer, not the server's sound buffer, and the latency reported during startup is for the local sound buffer only. Please note that video card drivers(in the kernel or X), and hardware-accelerated OpenGL, may interfere with jackd's ability to effectively run with realtime response.") },
+ { "jack", -1, "JACK", gettext_noop("Somewhat experimental driver, unusably buggy until Mednafen 0.8.C. The \"sound.buffer_time\" setting controls the size of the local sound buffer, not the server's sound buffer, and the latency reported during startup is for the local sound buffer only. Please note that video card drivers(in the kernel or X), and hardware-accelerated OpenGL, may interfere with jackd's ability to effectively run with realtime response.") },
 
-  { NULL, 0 },
+ { NULL, 0 },
 };
 
 static MDFNSetting_EnumList Special_List[] =
 {
-  { "0", 	-1 },
-  { "none", 	-1, "None/Disabled" },
-  { "hq2x", 	-1, "hq2x" },
-  { "hq3x", 	-1, "hq3x" },
-  { "hq4x", 	-1, "hq4x" },
-  { "scale2x",-1, "scale2x" },
-  { "scale3x",-1, "scale3x" },
-  { "scale4x",-1, "scale4x" },
+    { "0", 	-1 },
+    { "none", 	-1, "None/Disabled" },
 
-  { "2xsai", 	-1, "2xSaI" },
-  { "super2xsai", -1, "Super 2xSaI" },
-  { "supereagle", -1, "Super Eagle" },
-  { "nn2x",	-1, "Nearest-neighbor 2x" },
-  { "nn3x",	-1, "Nearest-neighbor 3x" },
-  { "nn4x",	-1, "Nearest-neighbor 4x" },
-  { "nny2x",	-1, "Nearest-neighbor 2x, y axis only" },
-  { "nny3x",	-1, "Nearest-neighbor 3x, y axis only" }, 
-  { "nny4x",	-1, "Nearest-neighbor 4x, y axis only" },
-  { NULL, 0 },
+#ifdef WANT_FANCY_SCALERS
+    { "hq2x", 	-1, "hq2x" },
+    { "hq3x", 	-1, "hq3x" },
+    { "hq4x", 	-1, "hq4x" },
+    { "scale2x",-1, "scale2x" },
+    { "scale3x",-1, "scale3x" },
+    { "scale4x",-1, "scale4x" },
+
+    { "2xsai", 	-1, "2xSaI" },
+    { "super2xsai", -1, "Super 2xSaI" },
+    { "supereagle", -1, "Super Eagle" },
+#endif
+
+    { "nn2x",	-1, "Nearest-neighbor 2x" },
+    { "nn3x",	-1, "Nearest-neighbor 3x" },
+    { "nn4x",	-1, "Nearest-neighbor 4x" },
+    { "nny2x",	-1, "Nearest-neighbor 2x, y axis only" },
+    { "nny3x",	-1, "Nearest-neighbor 3x, y axis only" }, 
+    { "nny4x",	-1, "Nearest-neighbor 4x, y axis only" },
+//    { "scanlines", -1, "Scanlines" },
+
+    { NULL, 0 },
 };
 
+#ifndef WII // FIXME WIIFIX gammyhack, not in wii-mednafen
 static MDFNSetting_EnumList Pixshader_List[] =
 {
-  { "none",	-1,	"None/Disabled" },
-  { "ipxnoty", -1,	"Linear interpolation on X axis only." },
-  { "ipynotx", -1,	"Linear interpolation on Y axis only." },
-  { "ipsharper", -1,	"Sharper bilinear interpolation." },
-  { "ipxnotysharper", -1, "Sharper version of \"ipxnoty\"." },
-  { "ipynotxsharper", -1, "Sharper version of \"ipynotx\"." },
-  { "scale2x", -1,	"Scale2x" },
-  { NULL, 0 },
-};
+    { "none",		SHADER_NONE,		"None/Disabled" },
+    { "autoip", 	SHADER_AUTOIP,	"Auto Interpolation", gettext_noop("Will automatically interpolate on each axis if the corresponding effective scaling factor is not an integer.") },
+    { "autoipsharper",	SHADER_AUTOIPSHARPER,	"Sharper Auto Interpolation", gettext_noop("Same as \"autoip\", but when interpolation is done, it is done in a manner that will reduce blurriness if possible.") },
+    { "scale2x", 	SHADER_SCALE2X,    "Scale2x" },
+    { "sabr",		SHADER_SABR,	"SABR v3.0", gettext_noop("GPU-intensive.") },
+    { "ipsharper", 	SHADER_IPSHARPER,  "Sharper bilinear interpolation." },
+    { "ipxnoty", 	SHADER_IPXNOTY,    "Linear interpolation on X axis only." },
+    { "ipynotx", 	SHADER_IPYNOTX,    "Linear interpolation on Y axis only." },
+    { "ipxnotysharper", SHADER_IPXNOTYSHARPER, "Sharper version of \"ipxnoty\"." },
+    { "ipynotxsharper", SHADER_IPYNOTXSHARPER, "Sharper version of \"ipynotx\"." },
 
-std::vector <MDFNSetting> NeoDriverSettings;
-MDFNSetting DriverSettings[] =
+    { NULL, 0 },
+};
+#endif
+
+static std::vector <MDFNSetting> NeoDriverSettings;
+static MDFNSetting DriverSettings[] =
 {
-  { "netplay.host", MDFNSF_NOFLAGS, gettext_noop("Server hostname."), NULL, MDFNST_STRING, "fobby.net" },
+  { "input.joystick.global_focus", MDFNSF_NOFLAGS, gettext_noop("Update physical joystick(s) internal state in Mednafen even when Mednafen lacks OS focus."), NULL, MDFNST_BOOL, "1" },
+  { "input.joystick.axis_threshold", MDFNSF_NOFLAGS, gettext_noop("Analog axis binary press detection threshold."), gettext_noop("Threshold for detecting a digital-like \"button\" press on analog axis, in percent."), MDFNST_FLOAT, "75", "0", "100" },
+  { "input.autofirefreq", MDFNSF_NOFLAGS, gettext_noop("Auto-fire frequency."), gettext_noop("Auto-fire frequency = GameSystemFrameRateHz / (value + 1)"), MDFNST_UINT, "3", "0", "1000" },
+  { "input.ckdelay", MDFNSF_NOFLAGS, gettext_noop("Dangerous key action delay."), gettext_noop("The length of time, in milliseconds, that a button/key corresponding to a \"dangerous\" command like power, reset, exit, etc. must be pressed before the command is executed."), MDFNST_UINT, "0", "0", "99999" },
+
+  { "netplay.host", MDFNSF_NOFLAGS, gettext_noop("Server hostname."), NULL, MDFNST_STRING, "netplay.fobby.net" },
   { "netplay.port", MDFNSF_NOFLAGS, gettext_noop("Server port."), NULL, MDFNST_UINT, "4046", "1", "65535" },
-  { "netplay.password", MDFNSF_NOFLAGS, gettext_noop("Server password."), gettext_noop("Password to connect to the netplay server."), MDFNST_STRING, "" },
-  { "netplay.localplayers", MDFNSF_NOFLAGS, gettext_noop("Local player count."), gettext_noop("Number of local players for network play."), MDFNST_UINT, "1", "1", "8" },
-  { "netplay.nick", MDFNSF_NOFLAGS, gettext_noop("Nickname."), gettext_noop("Nickname to use for network play chat."), MDFNST_STRING, "" },
-  { "netplay.gamekey", MDFNSF_NOFLAGS, gettext_noop("Key to hash with the MD5 hash of the game."), NULL, MDFNST_STRING, "" },
-  { "netplay.merge", MDFNSF_NOFLAGS, gettext_noop("Merge input to this player # on the server."), NULL, MDFNST_UINT, "0" },
   { "netplay.smallfont", MDFNSF_NOFLAGS, gettext_noop("Use small(tiny!) font for netplay chat console."), NULL, MDFNST_BOOL, "0" },
 
   { "video.fs", MDFNSF_NOFLAGS, gettext_noop("Enable fullscreen mode."), NULL, MDFNST_BOOL, "0", },
 #ifndef WII
-  { "video.driver", MDFNSF_NOFLAGS, gettext_noop("Select video driver, \"opengl\" or \"sdl\"."), NULL, MDFNST_ENUM, "opengl", NULL, NULL, NULL,NULL, VDriver_List },
+  { "video.driver", MDFNSF_NOFLAGS, gettext_noop("Video output method/driver."), NULL, MDFNST_ENUM, "opengl", NULL, NULL, NULL,NULL, VDriver_List },
 #else
-  { "video.driver", MDFNSF_NOFLAGS, gettext_noop("Select video driver, \"opengl\" or \"sdl\"."), NULL, MDFNST_ENUM, "sdl", NULL, NULL, NULL,NULL, VDriver_List },
+  { "video.driver", MDFNSF_NOFLAGS, gettext_noop("Video output method/driver."), NULL, MDFNST_ENUM, "sdl", NULL, NULL, NULL,NULL, VDriver_List },
 #endif
   { "video.glvsync", MDFNSF_NOFLAGS, gettext_noop("Attempt to synchronize OpenGL page flips to vertical retrace period."), 
-  gettext_noop("Note: Additionally, if this setting is 1, and the environment variable \"__GL_SYNC_TO_VBLANK\" is not set at all(either 0 or any value), then it will be set to \"1\". This has the effect of forcing vblank synchronization when running under Linux with NVidia's drivers."),
-  MDFNST_BOOL, "1" },
+			       gettext_noop("Note: Additionally, if the environment variable \"__GL_SYNC_TO_VBLANK\" does not exist, then it will be created and set to the value specified for this setting.  This has the effect of forcibly enabling or disabling vblank synchronization when running under Linux with NVidia's drivers."),
+				MDFNST_BOOL, "1" },
 
   { "video.frameskip", MDFNSF_NOFLAGS, gettext_noop("Enable frameskip during emulation rendering."), 
-  gettext_noop("Disable for rendering code performance testing."), MDFNST_BOOL, "1" },
+					gettext_noop("Disable for rendering code performance testing."), MDFNST_BOOL, "1" },
+
+  { "video.blit_timesync", MDFNSF_NOFLAGS, gettext_noop("Enable time synchronization(waiting) for frame blitting."),
+					gettext_noop("Disable to reduce latency, at the cost of potentially increased video \"juddering\", with the maximum reduction in latency being about 1 video frame's time.\nWill work best with emulated systems that are not very computationally expensive to emulate, combined with running on a relatively fast CPU."),
+					MDFNST_BOOL, "1" },
 
   { "ffspeed", MDFNSF_NOFLAGS, gettext_noop("Fast-forwarding speed multiplier."), NULL, MDFNST_FLOAT, "4", "1", "15" },
   { "fftoggle", MDFNSF_NOFLAGS, gettext_noop("Treat the fast-forward button as a toggle."), NULL, MDFNST_BOOL, "0" },
@@ -190,9 +222,6 @@ MDFNSetting DriverSettings[] =
   { "sfspeed", MDFNSF_NOFLAGS, gettext_noop("SLOW-forwarding speed multiplier."), NULL, MDFNST_FLOAT, "0.75", "0.25", "1" },
   { "sftoggle", MDFNSF_NOFLAGS, gettext_noop("Treat the SLOW-forward button as a toggle."), NULL, MDFNST_BOOL, "0" },
 
-  { "autofirefreq", MDFNSF_NOFLAGS, gettext_noop("Auto-fire frequency."), gettext_noop("Auto-fire frequency = GameSystemFrameRateHz / (value + 1)"), MDFNST_UINT, "3", "0", "1000" },
-  { "analogthreshold", MDFNSF_NOFLAGS, gettext_noop("Analog axis press threshold."), gettext_noop("Threshold for detecting a \"button\" press on analog axis, in percent."), MDFNST_FLOAT, "75", "0", "100" },
-  { "ckdelay", MDFNSF_NOFLAGS, gettext_noop("Dangerous key action delay."), gettext_noop("The length of time, in milliseconds, that a button/key corresponding to a \"dangerous\" command like power, reset, exit, etc. must be pressed before the command is executed."), MDFNST_UINT, "0", "0", "99999" },
 #ifndef WII
   { "nothrottle", MDFNSF_NOFLAGS, gettext_noop("Disable speed throttling when sound is disabled."), NULL, MDFNST_BOOL, "0"},
 #else
@@ -204,302 +233,230 @@ MDFNSetting DriverSettings[] =
 #else
   { "sound.driver", MDFNSF_NOFLAGS, gettext_noop("Select sound driver."), gettext_noop("The following choices are possible, sorted by preference, high to low, when \"default\" driver is used, but dependent on being compiled in."), MDFNST_ENUM, "wii", NULL, NULL, NULL, NULL, SDriver_List },
 #endif
-  { "sound.device", MDFNSF_NOFLAGS, gettext_noop("Select sound output device."), NULL, MDFNST_STRING, "default", NULL, NULL },
+  { "sound.device", MDFNSF_NOFLAGS, gettext_noop("Select sound output device."), gettext_noop("When using ALSA sound output under Linux, the \"sound.device\" setting \"default\" is Mednafen's default, IE \"hw:0\", not ALSA's \"default\". If you want to use ALSA's \"default\", use \"sexyal-literal-default\"."), MDFNST_STRING, "default", NULL, NULL },
   { "sound.volume", MDFNSF_NOFLAGS, gettext_noop("Sound volume level, in percent."), NULL, MDFNST_UINT, "100", "0", "150" },
   { "sound", MDFNSF_NOFLAGS, gettext_noop("Enable sound output."), NULL, MDFNST_BOOL, "1" },
-  { "sound.period_time", MDFNSF_NOFLAGS, gettext_noop("Desired period size in microseconds."), gettext_noop("Currently only affects OSS and ALSA output.  A value of 0 defers to the default in the driver code in SexyAL.\n\nNote: This is not the \"sound buffer size\" setting, that would be \"sound.buffer_time\"."), MDFNST_UINT,  "0", "0", "100000" },
+  { "sound.period_time", MDFNSF_NOFLAGS, gettext_noop("Desired period size in microseconds."), gettext_noop("Currently only affects OSS, ALSA, WASAPI, and SDL output.  A value of 0 defers to the default in the driver code in SexyAL.\n\nNote: This is not the \"sound buffer size\" setting, that would be \"sound.buffer_time\"."), MDFNST_UINT,  "0", "0", "100000" },
   { "sound.buffer_time", MDFNSF_NOFLAGS, gettext_noop("Desired total buffer size in milliseconds."), NULL, MDFNST_UINT, 
-#ifdef WII
-  "52"
-#else
-#ifdef WIN32
-  "52"
-#else
-  "32"
-#endif
-#endif
-  ,"1", "1000" },
-  { "sound.rate", MDFNSF_NOFLAGS, gettext_noop("Specifies the sound playback rate, in frames per second(\"Hz\")."), NULL, MDFNST_UINT, "48000", "22050", "48000"},
+   #ifdef WII
+   "52"
+   #else
+   #ifdef WIN32
+   "52"
+   #else
+   "32"
+   #endif
+   #endif
+   ,"1", "1000" },
+  { "sound.rate", MDFNSF_NOFLAGS, gettext_noop("Specifies the sound playback rate, in sound frames per second(\"Hz\")."), NULL, MDFNST_UINT, "48000", "22050", "1048576"},
 
-#ifdef WANT_DEBUGGER
+  #ifdef WANT_DEBUGGER
   { "debugger.autostepmode", MDFNSF_NOFLAGS, gettext_noop("Automatically go into the debugger's step mode after a game is loaded."), NULL, MDFNST_BOOL, "0" },
-#endif
+  #endif
 
   { "osd.state_display_time", MDFNSF_NOFLAGS, gettext_noop("The length of time, in milliseconds, to display the save state or the movie selector after selecting a state or movie."),  NULL, MDFNST_UINT, "2000", "0", "15000" },
+  { "osd.alpha_blend", MDFNSF_NOFLAGS, gettext_noop("Enable alpha blending for OSD elements."), NULL, MDFNST_BOOL, "1" },
 };
-int DriverSettingsSize = sizeof(DriverSettings);
 
 static void BuildSystemSetting(MDFNSetting *setting, const char *system_name, const char *name, const char *description, const char *description_extra, MDFNSettingType type, 
-                               const char *default_value, const char *minimum = NULL, const char *maximum = NULL,
-                               bool (*validate_func)(const char *name, const char *value) = NULL, void (*ChangeNotification)(const char *name) = NULL, 
-                               const MDFNSetting_EnumList *enum_list = NULL)
+	const char *default_value, const char *minimum = NULL, const char *maximum = NULL,
+	bool (*validate_func)(const char *name, const char *value) = NULL, void (*ChangeNotification)(const char *name) = NULL, 
+        const MDFNSetting_EnumList *enum_list = NULL)
 {
-  char setting_name[256];
+ char setting_name[256];
 
-  memset(setting, 0, sizeof(MDFNSetting));
+ memset(setting, 0, sizeof(MDFNSetting));
 
-  trio_snprintf(setting_name, 256, "%s.%s", system_name, name);
+ trio_snprintf(setting_name, 256, "%s.%s", system_name, name);
 
-  setting->name = strdup(setting_name);
-  setting->flags = MDFNSF_COMMON_TEMPLATE;
-  setting->description = description;
-  setting->description_extra = description_extra;
-  setting->type = type;
-  setting->default_value = default_value;
-  setting->minimum = minimum;
-  setting->maximum = maximum;
-  setting->validate_func = validate_func;
-  setting->ChangeNotification = ChangeNotification;
-  setting->enum_list = enum_list;
-}
-
-typedef struct
-{
-  int x;
-  int y;
-} resolution_pairs;
-
-static void FindBestResolution(int nominal_width, int nominal_height, int *res_x, int *res_y, double *scale)
-{
-  static const resolution_pairs GoodResolutions[] =
-  {
-    { 640, 480 },
-    { 800, 600 },
-    { 1024, 768 },
-  };
-  double max_visible_x = 0, max_visible_y = 0;
-  int max_which = -1;
-
-  for(unsigned int i = 0; i < sizeof(GoodResolutions) / sizeof(resolution_pairs); i++)
-  {
-    int x, y;
-    double visible_x, visible_y;
-
-    x = GoodResolutions[i].x / nominal_width;
-    y = GoodResolutions[i].y / nominal_height;
-
-    if(y < x)
-      x = y;
-    else if(x < y)
-      y = x;
-
-    if(!x || !y)
-      continue;
-
-    visible_x = (double)(nominal_width * x) / GoodResolutions[i].x;
-    visible_y = (double)(nominal_height * y) / GoodResolutions[i].y;
-
-    if(visible_x > max_visible_x && visible_y > max_visible_y)
-    {
-      max_visible_x = visible_x;
-      max_visible_y = visible_y;
-      max_which = i;
-      *scale = x;
-    }
-  }
-
-  if(max_which == -1)
-  {
-    puts("Oops");
-    max_which = 0;
-    *scale = 1;
-  }
-
-  *res_x = GoodResolutions[max_which].x;
-  *res_y = GoodResolutions[max_which].y;
+ setting->name = strdup(setting_name);
+ setting->flags = MDFNSF_COMMON_TEMPLATE;
+ setting->description = description;
+ setting->description_extra = description_extra;
+ setting->type = type;
+ setting->default_value = default_value;
+ setting->minimum = minimum;
+ setting->maximum = maximum;
+ setting->validate_func = validate_func;
+ setting->ChangeNotification = ChangeNotification;
+ setting->enum_list = enum_list;
 }
 
 // TODO: Actual enum values
 static const MDFNSetting_EnumList DisFontSize_List[] =
 {
-  { "xsmall", 	-1 },
-  { "small",	-1 },
-  { "medium",	-1 },
-  { "large",	-1 },
-  { NULL, 0 },
+ { "xsmall", 	-1, gettext_noop("4x5") },
+ { "small",	-1, gettext_noop("5x7") },
+ { "medium",	-1, gettext_noop("6x13") },
+ { "large",	-1, gettext_noop("9x18") },
+ { NULL, 0 },
 };
 
 static const MDFNSetting_EnumList StretchMode_List[] =
 {
-  { "0", 0, gettext_noop("Disabled") },
-  { "off", 0 },
+ { "0", 0, gettext_noop("Disabled") },
+ { "off", 0 },
 
-  { "1", 1 },
-  { "full", 1, gettext_noop("Full"), gettext_noop("Full-screen stretch, disregarding aspect ratio.") },
+ { "1", 1 },
+ { "full", 1, gettext_noop("Full"), gettext_noop("Full-screen stretch, disregarding aspect ratio.") },
 
-  { "2", 2 },
-  { "aspect", 2, gettext_noop("Aspect Preserve"), gettext_noop("Full-screen stretch as far as the aspect ratio(in this sense, the equivalent xscalefs == yscalefs) can be maintained.") },
+ { "2", 2 },
+ { "aspect", 2, gettext_noop("Aspect Preserve"), gettext_noop("Full-screen stretch as far as the aspect ratio(in this sense, the equivalent xscalefs == yscalefs) can be maintained.") },
 
-  //{ "aspect_integer", 3, gettext_noop("Aspect Preserve + Integer Scale"), gettext_noop("Same as \"aspect\", but will truncate the equivalent xscalefs/yscalefs to integers.") },
+ { "aspect_int", 3, gettext_noop("Aspect Preserve + Integer Scale"), gettext_noop("Full-screen stretch, same as \"aspect\" except that the equivalent xscalefs and yscalefs are rounded down to the nearest integer.") },
+ { "aspect_mult2", 4, gettext_noop("Aspect Preserve + Integer Multiple-of-2 Scale"), gettext_noop("Full-screen stretch, same as \"aspect_int\", but rounds down to the nearest multiple of 2.") },
 
-  { NULL, 0 },
+ { NULL, 0 },
+};
+
+static const MDFNSetting_EnumList VideoIP_List[] =
+{
+ { "0", VIDEOIP_OFF, gettext_noop("Disabled") },
+
+ { "1", VIDEOIP_BILINEAR, gettext_noop("Bilinear") },
+
+ // Disabled until a fix can be made for rotation.
+ { "x", VIDEOIP_LINEAR_X, gettext_noop("Linear (X)"), gettext_noop("Interpolation only on the X axis.") },
+ { "y", VIDEOIP_LINEAR_Y, gettext_noop("Linear (Y)"), gettext_noop("Interpolation only on the Y axis.") },
+
+ { NULL, 0 },
 };
 
 void MakeDebugSettings(std::vector <MDFNSetting> &settings)
 {
-#ifdef WANT_DEBUGGER
-  for(unsigned int i = 0; i < MDFNSystems.size(); i++)
-  {
-    const DebuggerInfoStruct *dbg = MDFNSystems[i]->Debugger;
-    MDFNSetting setting;
-    const char *sysname = MDFNSystems[i]->shortname;
+ #ifdef WANT_DEBUGGER
+ for(unsigned int i = 0; i < MDFNSystems.size(); i++)
+ {
+  const DebuggerInfoStruct *dbg = MDFNSystems[i]->Debugger;
+  MDFNSetting setting;
+  const char *sysname = MDFNSystems[i]->shortname;
 
-    if(!dbg)
-      continue;
+  if(!dbg)
+   continue;
 
-    BuildSystemSetting(&setting, sysname, "debugger.disfontsize", gettext_noop("Disassembly font size."), NULL, MDFNST_ENUM, "small", NULL, NULL, NULL, NULL, DisFontSize_List);
-    settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "debugger.disfontsize", gettext_noop("Disassembly font size."), gettext_noop("Note: Setting the font size to larger than the default may cause text overlap in the debugger."), MDFNST_ENUM, "small", NULL, NULL, NULL, NULL, DisFontSize_List);
+  settings.push_back(setting);
 
-    BuildSystemSetting(&setting, sysname, "debugger.memcharenc", gettext_noop("Character encoding for the debugger's memory editor."), NULL, MDFNST_STRING, dbg->DefaultCharEnc);
-    settings.push_back(setting);
-  }
-#endif
+  BuildSystemSetting(&setting, sysname, "debugger.memcharenc", gettext_noop("Character encoding for the debugger's memory editor."), NULL, MDFNST_STRING, dbg->DefaultCharEnc);
+  settings.push_back(setting);
+ }
+ #endif
 }
 
 void MakeVideoSettings(std::vector <MDFNSetting> &settings)
 {
-  for(unsigned int i = 0; i < MDFNSystems.size() + 1; i++)
-  {
-    int nominal_width;
-    int nominal_height;
-    bool multires;
-    const char *sysname;
-    char default_value[256];
-    MDFNSetting setting;
-    int default_xres, default_yres;
-    double default_scalefs;
-    double default_scale;
+ for(unsigned int i = 0; i < MDFNSystems.size() + 1; i++)
+ {
+  int nominal_width;
+  int nominal_height;
+  bool multires;
+  const char *sysname;
+  char default_value[256];
+  MDFNSetting setting;
+  const int default_xres = 0, default_yres = 0;
+  const double default_scalefs = 1.0;
+  double default_scale;
 
-    if(i == MDFNSystems.size())
-    {
-      nominal_width = 384;
-      nominal_height = 240;
-      multires = FALSE;
-      sysname = "player";
-    }
-    else
-    {
-      nominal_width = MDFNSystems[i]->nominal_width;
-      nominal_height = MDFNSystems[i]->nominal_height;
-      multires = MDFNSystems[i]->multires;
-      sysname = (const char *)MDFNSystems[i]->shortname;
-    }
+  if(i == MDFNSystems.size())
+  {
+   nominal_width = 384;
+   nominal_height = 240;
+   multires = FALSE;
+   sysname = "player";
+  }
+  else
+  {
+   nominal_width = MDFNSystems[i]->nominal_width;
+   nominal_height = MDFNSystems[i]->nominal_height;
+   multires = MDFNSystems[i]->multires;
+   sysname = (const char *)MDFNSystems[i]->shortname;
+  }
 
 #ifndef WII
-    //printf("%s\n", sysname);
-    if(multires)
-    {
-      double tmpx, tmpy;
+  if(multires)
+   default_scale = ceil(1024 / nominal_width);
+  else
+   default_scale = ceil(768 / nominal_width);
 
-      default_xres = 1024;
-      default_yres = 768;
+  if(default_scale * nominal_width > 1024)
+   default_scale--;
 
-      tmpx = (double)default_xres / nominal_width;
-      tmpy = (double)default_yres / nominal_height;
-
-      if(tmpx > tmpy)
-        tmpx = tmpy;
-
-      default_scalefs = tmpx;
-      default_scale = ceil(1024 / nominal_width);
-      //printf("Fufu: %.64f\n", default_scalefs);
-    }
-    else
-    {
-      FindBestResolution(nominal_width, nominal_height, &default_xres, &default_yres, &default_scalefs);
-      default_scale = ceil(768 / nominal_width);
-    }
-    if(default_scale * nominal_width > 1024)
-      default_scale--;
-
-    if(!default_scale)
-      default_scale = 1;
-
-    //if(multires)
-    //{
-    // default_scale = ceil((double)1024 / nominal_width);
-    //}
-    //else
-    //{
-    // default_scale = ceil((double)640 / nominal_width);
-    //}
+  if(!default_scale)
+   default_scale = 1;
 #else
+    // XXX WIIFIX Out of date?
     default_xres = nominal_width;
     default_yres = nominal_height;
     default_scalefs = 1.0;
     default_scale = 1;
 #endif
 
-    if( i < MDFNSystems.size() )
-    {
-      MDFNI_printf( "%d, %s %d %d,  %d %d, %f, %f\n", i, sysname, MDFNSystems[i]->nominal_width, MDFNSystems[i]->nominal_height, default_xres, default_yres, default_scalefs, default_scale);
-    }
+  trio_snprintf(default_value, 256, "%d", default_xres);
+  BuildSystemSetting(&setting, sysname, "xres", CSD_xres, CSDE_xres, MDFNST_UINT, strdup(default_value), "0", "65536");
+  settings.push_back(setting);
 
-    trio_snprintf(default_value, 256, "%d", default_xres);
-    BuildSystemSetting(&setting, sysname, "xres", CSD_xres, NULL, MDFNST_UINT, strdup(default_value), "64", "65536");
-    settings.push_back(setting);
+  trio_snprintf(default_value, 256, "%d", default_yres);
+  BuildSystemSetting(&setting, sysname, "yres", CSD_yres, CSDE_yres, MDFNST_UINT, strdup(default_value), "0", "65536");
+  settings.push_back(setting);
 
-    trio_snprintf(default_value, 256, "%d", default_yres);
-    BuildSystemSetting(&setting, sysname, "yres", CSD_yres, NULL, MDFNST_UINT, strdup(default_value), "64", "65536");
-    settings.push_back(setting);
+  trio_snprintf(default_value, 256, "%f", default_scale);
+  BuildSystemSetting(&setting, sysname, "xscale", CSD_xscale, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
+  settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "yscale", CSD_yscale, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
+  settings.push_back(setting);
 
-    trio_snprintf(default_value, 256, "%f", default_scale);
-    BuildSystemSetting(&setting, sysname, "xscale", CSD_xscale, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
-    settings.push_back(setting);
-    BuildSystemSetting(&setting, sysname, "yscale", CSD_yscale, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
-    settings.push_back(setting);
+  trio_snprintf(default_value, 256, "%f", default_scalefs);
+  BuildSystemSetting(&setting, sysname, "xscalefs", CSD_xscalefs, CSDE_xyscalefs, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
+  settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "yscalefs", CSD_yscalefs, CSDE_xyscalefs, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
+  settings.push_back(setting);
 
-    trio_snprintf(default_value, 256, "%f", default_scalefs);
-    BuildSystemSetting(&setting, sysname, "xscalefs", CSD_xscalefs, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
-    settings.push_back(setting);
-    BuildSystemSetting(&setting, sysname, "yscalefs", CSD_yscalefs, NULL, MDFNST_FLOAT, strdup(default_value), "0.01", "256");
-    settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "scanlines", CSD_scanlines, CSDE_scanlines, MDFNST_UINT, "0", "0", "100");
+  settings.push_back(setting);
 
-    BuildSystemSetting(&setting, sysname, "scanlines", CSD_scanlines, CSDE_scanlines, MDFNST_UINT, "0", "0", "100");
-    settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "stretch", CSD_stretch, NULL, MDFNST_ENUM, "aspect_mult2", NULL, NULL, NULL, NULL, StretchMode_List);
+  settings.push_back(setting);
 
-    BuildSystemSetting(&setting, sysname, "stretch", CSD_stretch, NULL, MDFNST_ENUM, "0", NULL, NULL, NULL, NULL, StretchMode_List);
-    settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "videoip", CSD_videoip, NULL, MDFNST_ENUM, multires ? "1" : "0", NULL, NULL, NULL, NULL, VideoIP_List);
+  settings.push_back(setting);
 
-    BuildSystemSetting(&setting, sysname, "videoip", CSD_videoip, NULL, MDFNST_BOOL, multires ? "1" : "0");
-    settings.push_back(setting);
+  BuildSystemSetting(&setting, sysname, "special", CSD_special, CSDE_special, MDFNST_ENUM, "none", NULL, NULL, NULL, NULL, Special_List);
+  settings.push_back(setting);
 
-    BuildSystemSetting(&setting, sysname, "special", CSD_special, CSDE_special, MDFNST_ENUM, "none", NULL, NULL, NULL, NULL, Special_List);
-    settings.push_back(setting);
-
-    BuildSystemSetting(&setting, sysname, "pixshader", CSD_pixshader, CSDE_pixshader, MDFNST_ENUM, "none", NULL, NULL, NULL, NULL, Pixshader_List);
-    settings.push_back(setting);
-  }
+#ifndef WII
+  BuildSystemSetting(&setting, sysname, "pixshader", CSD_pixshader, CSDE_pixshader, MDFNST_ENUM, "none", NULL, NULL, NULL, NULL, Pixshader_List);
+  settings.push_back(setting);
+#endif
+ }
 
 }
 
 #ifndef WII
 static SDL_Thread *GameThread;
 #endif
+static MDFN_Surface *VTBuffer[2] = { NULL, NULL };
+static MDFN_Rect *VTLineWidths[2] = { NULL, NULL };
 
-//static uint32 *VTBuffer[2] = { NULL, NULL };
-volatile MDFN_Surface *VTBuffer[2] = { NULL, NULL };
-MDFN_Rect *VTLineWidths[2] = { NULL, NULL };
-
-static volatile int VTBackBuffer = 0;
+static int volatile VTSSnapshot = 0;
+static int volatile VTBackBuffer = 0;
 #ifndef WII
 static SDL_mutex *VTMutex = NULL, *EVMutex = NULL, *GameMutex = NULL;
 static SDL_mutex *StdoutMutex = NULL;
-#endif 
+#endif
 
-//static volatile uint32 *VTReady;
-volatile MDFN_Surface *VTReady;
-volatile MDFN_Rect *VTLWReady;
-volatile MDFN_Rect *VTDRReady;
-MDFN_Rect VTDisplayRects[2];
+static MDFN_Surface * volatile VTReady;
+static MDFN_Rect * volatile VTLWReady;
+static MDFN_Rect * volatile VTDRReady;
+static MDFN_Rect VTDisplayRects[2];
+static bool sc_blit_timesync;
 
 void LockGameMutex(bool lock)
 {
 #ifndef WII
-  if(lock)
-    SDL_mutexP(GameMutex);
-  else
-    SDL_mutexV(GameMutex);
+ if(lock)
+  SDL_mutexP(GameMutex);
+ else
+  SDL_mutexV(GameMutex);
 #endif
 }
 
@@ -518,203 +475,214 @@ MDFNGI *CurGame=NULL;
 void MDFND_PrintError(const char *s)
 {
 #ifndef WII
-  if(RemoteOn)
-    Remote_SendErrorMessage(s);
-  else
-  {
-    if(StdoutMutex)
-      SDL_mutexP(StdoutMutex);
-
-    puts(s);
-    fflush(stdout);
+ if(RemoteOn)
+  Remote_SendErrorMessage(s);
+ else
+ {
+  if(StdoutMutex)
+   SDL_mutexP(StdoutMutex);
+ 
+  puts(s);
+  fflush(stdout);
 
 #if 0
-#ifdef WIN32
-    MessageBox(0, s, "Mednafen Error", MB_ICONERROR | MB_OK | MB_SETFOREGROUND | MB_TOPMOST);
-#endif
+  #ifdef WIN32
+  MessageBox(0, s, "Mednafen Error", MB_ICONERROR | MB_OK | MB_SETFOREGROUND | MB_TOPMOST);
+  #endif
 #endif
 
-    if(StdoutMutex)
-      SDL_mutexV(StdoutMutex);
-  }
+  if(StdoutMutex)
+   SDL_mutexV(StdoutMutex);
+ }
 #else
 #ifdef WII_NETTRACE
-  if( s )
-  {
-    net_print_string( NULL, 0, "Error: %s", s );
-  }
+ if(s)
+ {
+   net_print_string(NULL, 0, "Error: %s", s);
+ }
 #endif
-  wii_set_status_message( s );
 #endif
 }
 
 void MDFND_Message(const char *s)
 {
 #ifndef WII
-  if(RemoteOn)
-    Remote_SendStatusMessage(s);
-  else
-  {
-    if(StdoutMutex)
-      SDL_mutexP(StdoutMutex);
+ if(RemoteOn)
+  Remote_SendStatusMessage(s);
+ else
+ {
+  if(StdoutMutex)
+   SDL_mutexP(StdoutMutex);
 
-    fputs(s,stdout);
-    fflush(stdout);
+  fputs(s,stdout);
+  fflush(stdout);
 
-    if(StdoutMutex)
-      SDL_mutexV(StdoutMutex);
-  }
+  if(StdoutMutex)
+   SDL_mutexV(StdoutMutex);
 #else
 #ifdef WII_NETTRACE
-  if( s )
-  {
-    net_print_string( NULL, 0, "%s", s );
-  }
+ if(s)
+ {
+   net_print_string(NULL, 0, "%s", s);
+ }
 #endif
 #endif
+ }
 }
 
 // CreateDirs should make sure errno is intact after calling mkdir() if it fails.
-bool CreateDirs(void)
+static bool CreateDirs(void)
 {
-  const char *subs[7] = { "mcs", "mcm", "snaps", "palettes", "sav", "cheats", "firmware" };
-  char *tdir;
+ const char *subs[7] = { "mcs", "mcm", "snaps", "palettes", "sav", "cheats", "firmware" };
+ char *tdir;
 
-  if(MDFN_mkdir(DrBaseDirectory, S_IRWXU) == -1 && errno != EEXIST)
+ if(MDFN_mkdir(DrBaseDirectory, S_IRWXU) == -1 && errno != EEXIST)
+ {
+  return(FALSE);
+ }
+
+ for(unsigned int x = 0; x < sizeof(subs) / sizeof(const char *); x++)
+ {
+  tdir = trio_aprintf("%s" PSS "%s",DrBaseDirectory,subs[x]);
+  if(MDFN_mkdir(tdir, S_IRWXU) == -1 && errno != EEXIST)
   {
-    return(FALSE);
+   free(tdir);
+   return(FALSE);
   }
+  free(tdir);
+ }
 
-  for(unsigned int x = 0; x < sizeof(subs) / sizeof(const char *); x++)
-  {
-    tdir = trio_aprintf("%s"PSS"%s",DrBaseDirectory,subs[x]);
-    if(MDFN_mkdir(tdir, S_IRWXU) == -1 && errno != EEXIST)
-    {
-      free(tdir);
-      return(FALSE);
-    }
-    free(tdir);
-  }
-
-  return(TRUE);
+ return(TRUE);
 }
 
 #if defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
 
-static const char *SiginfoFormatString = NULL;
-static volatile bool SignalSafeExitWanted = false;
+static const char *SiginfoString = NULL;
+static bool volatile SignalSafeExitWanted = false;
 typedef struct
 {
-  int number;
-  const char *name;
-  const char *message;
-  const char *translated;	// Needed since gettext() can potentially deadlock when used in a signal handler.
-  const bool SafeTryExit;
+ int number;
+ const char *name;
+ const char *message;
+ const char *translated;	// Needed since gettext() can potentially deadlock when used in a signal handler.
+ const bool SafeTryExit;
 } SignalInfo;
 
 static SignalInfo SignalDefs[] =
 {
-#ifdef SIGINT
-  { SIGINT, "SIGINT", gettext_noop("How DARE you interrupt me!\n"), NULL, TRUE },
-#endif
+ #ifdef SIGINT
+ { SIGINT, "SIGINT", gettext_noop("How DARE you interrupt me!\n"), NULL, TRUE },
+ #endif
 
-#ifdef SIGTERM
-  { SIGTERM, "SIGTERM", gettext_noop("MUST TERMINATE ALL HUMANS\n"), NULL, TRUE },
-#endif
+ #ifdef SIGTERM
+ { SIGTERM, "SIGTERM", gettext_noop("MUST TERMINATE ALL HUMANS\n"), NULL, TRUE },
+ #endif
 
-#ifdef SIGHUP
-  { SIGHUP, "SIGHUP", gettext_noop("Reach out and hang-up on someone.\n"), NULL, FALSE },
-#endif
+ #ifdef SIGHUP
+ { SIGHUP, "SIGHUP", gettext_noop("Reach out and hang-up on someone.\n"), NULL, FALSE },
+ #endif
 
-#ifdef SIGSEGV
-  { SIGSEGV, "SIGSEGV", gettext_noop("Iyeeeeeeeee!!!  A segmentation fault has occurred.  Have a fluffy day.\n"), NULL, FALSE },
-#endif
+ #ifdef SIGSEGV
+ { SIGSEGV, "SIGSEGV", gettext_noop("Iyeeeeeeeee!!!  A segmentation fault has occurred.  Have a fluffy day.\n"), NULL, FALSE },
+ #endif
 
-#ifdef SIGPIPE
-  { SIGPIPE, "SIGPIPE", gettext_noop("The pipe has broken!  Better watch out for floods...\n"), NULL, FALSE },
-#endif
+ #ifdef SIGPIPE
+ { SIGPIPE, "SIGPIPE", gettext_noop("The pipe has broken!  Better watch out for floods...\n"), NULL, FALSE },
+ #endif
 
-#if defined(SIGBUS) && SIGBUS != SIGSEGV
-  /* SIGBUS can == SIGSEGV on some platforms */
-  { SIGBUS, "SIGBUS", gettext_noop("I told you to be nice to the driver.\n"), NULL, FALSE },
-#endif
+ #if defined(SIGBUS) && SIGBUS != SIGSEGV
+ /* SIGBUS can == SIGSEGV on some platforms */
+ { SIGBUS, "SIGBUS", gettext_noop("I told you to be nice to the driver.\n"), NULL, FALSE },
+ #endif
 
-#ifdef SIGFPE
-  { SIGFPE, "SIGFPE", gettext_noop("Those darn floating points.  Ne'er know when they'll bite!\n"), NULL, FALSE },
-#endif
+ #ifdef SIGFPE
+ { SIGFPE, "SIGFPE", gettext_noop("Those darn floating points.  Ne'er know when they'll bite!\n"), NULL, FALSE },
+ #endif
 
-#ifdef SIGALRM
-  { SIGALRM, "SIGALRM", gettext_noop("Don't throw your clock at the meowing cats!\n"), NULL, TRUE },
-#endif
+ #ifdef SIGALRM
+ { SIGALRM, "SIGALRM", gettext_noop("Don't throw your clock at the meowing cats!\n"), NULL, TRUE },
+ #endif
 
-#ifdef SIGABRT
-  { SIGABRT, "SIGABRT", gettext_noop("Abort, Retry, Ignore, Fail?\n"), NULL, FALSE },
-#endif
+ #ifdef SIGABRT
+ { SIGABRT, "SIGABRT", gettext_noop("Abort, Retry, Ignore, Fail?\n"), NULL, FALSE },
+ #endif
+ 
+ #ifdef SIGUSR1
+ { SIGUSR1, "SIGUSR1", gettext_noop("Killing your processes is not nice.\n"), NULL, TRUE },
+ #endif
 
-#ifdef SIGUSR1
-  { SIGUSR1, "SIGUSR1", gettext_noop("Killing your processes is not nice.\n"), NULL, TRUE },
-#endif
-
-#ifdef SIGUSR2
-  { SIGUSR2, "SIGUSR2", gettext_noop("Killing your processes is not nice.\n"), NULL, TRUE },
-#endif
+ #ifdef SIGUSR2
+ { SIGUSR2, "SIGUSR2", gettext_noop("Killing your processes is not nice.\n"), NULL, TRUE },
+ #endif
 };
+
+static volatile int SignalSTDOUT;
 
 static void SetSignals(void (*t)(int))
 {
-  SiginfoFormatString = _("\nSignal %d(%s) has been caught and dealt with...\n");
-  for(unsigned int x = 0; x < sizeof(SignalDefs) / sizeof(SignalInfo); x++)
-  {
-    if(!SignalDefs[x].translated)
-      SignalDefs[x].translated = _(SignalDefs[x].message);
+ SignalSTDOUT = fileno(stdout);
 
-#ifdef HAVE_SIGACTION
-    struct sigaction act;
+ SiginfoString = _("\nSignal has been caught and dealt with: ");
+ for(unsigned int x = 0; x < sizeof(SignalDefs) / sizeof(SignalInfo); x++)
+ {
+  if(!SignalDefs[x].translated)
+   SignalDefs[x].translated = _(SignalDefs[x].message);
 
-    memset(&act, 0, sizeof(struct sigaction));
+  #ifdef HAVE_SIGACTION
+  struct sigaction act;
 
-    act.sa_handler = t;
-    act.sa_flags = SA_RESTART;
+  memset(&act, 0, sizeof(struct sigaction));
 
-    sigaction(SignalDefs[x].number, &act, NULL);
-#else
-    signal(SignalDefs[x].number, t);
-#endif
-  }
+  act.sa_handler = t;
+  act.sa_flags = SA_RESTART;
+
+  sigaction(SignalDefs[x].number, &act, NULL);
+  #else
+  signal(SignalDefs[x].number, t);
+  #endif
+ }
+}
+
+static void SignalPutString(const char *string)
+{
+ size_t count = 0;
+
+ while(string[count]) { count++; }
+
+ write(SignalSTDOUT, string, count);
 }
 
 static void CloseStuff(int signum)
 {
-  const char *name = "unknown";
-  const char *translated = NULL;
-  bool safetryexit = false;
+	const int save_errno = errno;
+	const char *name = "unknown";
+	const char *translated = NULL;
+	bool safetryexit = false;
 
-  for(unsigned int x = 0; x < sizeof(SignalDefs) / sizeof(SignalInfo); x++)
-  {
-    if(SignalDefs[x].number == signum)
-    {
-      name = SignalDefs[x].name;
-      translated = SignalDefs[x].translated;
-      safetryexit = SignalDefs[x].SafeTryExit;
-      break;
-    }
-  }
+	for(unsigned int x = 0; x < sizeof(SignalDefs) / sizeof(SignalInfo); x++)
+	{
+	 if(SignalDefs[x].number == signum)
+	 {
+	  name = SignalDefs[x].name;
+	  translated = SignalDefs[x].translated;
+	  safetryexit = SignalDefs[x].SafeTryExit;
+	  break;
+	 }
+	}
 
-  printf(SiginfoFormatString, signum, name);
-  printf("%s", translated);
+	SignalPutString(SiginfoString);
+	SignalPutString(name);
+        SignalPutString("\n");
+	SignalPutString(translated);
 
-  if(safetryexit)
-  {
-    SignalSafeExitWanted = safetryexit;
-    return;
-  }
+	if(safetryexit)
+	{
+         SignalSafeExitWanted = safetryexit;
+	 errno = save_errno;
+         return;
+	}
 
-  if(GameThread && SDL_ThreadID() == MainThreadID)
-  {
-    SDL_KillThread(GameThread);		// Could this potentially deadlock?
-    GameThread = NULL;
-  }
-  exit(1);
+	_exit(1);
 }
 #endif
 
@@ -722,134 +690,145 @@ static ARGPSTRUCT *MDFN_Internal_Args = NULL;
 
 static int HokeyPokeyFallDown(const char *name, const char *value)
 {
-  if(!MDFNI_SetSetting(name, value))
-    return(0);
-  return(1);
+ if(!MDFNI_SetSetting(name, value))
+  return(0);
+ return(1);
 }
 
-void DeleteInternalArgs(void)
+static void DeleteInternalArgs(void)
 {
-  if(!MDFN_Internal_Args) return;
-  ARGPSTRUCT *argptr = MDFN_Internal_Args;
+ if(!MDFN_Internal_Args) return;
+ ARGPSTRUCT *argptr = MDFN_Internal_Args;
 
-  do
-  {
-    free((void*)argptr->name);
-    argptr++;
-  } while(argptr->name || argptr->var || argptr->subs);
-  free(MDFN_Internal_Args);
-  MDFN_Internal_Args = NULL;
+ do
+ {
+  free((void*)argptr->name);
+  argptr++;
+ } while(argptr->name || argptr->var || argptr->subs);
+ free(MDFN_Internal_Args);
+ MDFN_Internal_Args = NULL;
 }
 
-void MakeMednafenArgsStruct(void)
+static void MakeMednafenArgsStruct(void)
 {
-  const std::multimap <uint32, MDFNCS> *settings;
-  std::multimap <uint32, MDFNCS>::const_iterator sit;
+ const std::multimap <uint32, MDFNCS> *settings;
+ std::multimap <uint32, MDFNCS>::const_iterator sit;
 
-  settings = MDFNI_GetSettings();
+ settings = MDFNI_GetSettings();
 
-  MDFN_Internal_Args = (ARGPSTRUCT *)malloc(sizeof(ARGPSTRUCT) * (1 + settings->size()));
+ MDFN_Internal_Args = (ARGPSTRUCT *)malloc(sizeof(ARGPSTRUCT) * (1 + settings->size()));
 
-  unsigned int x = 0;
+ unsigned int x = 0;
 
-  for(sit = settings->begin(); sit != settings->end(); sit++)
-  {
-    MDFN_Internal_Args[x].name = strdup(sit->second.name);
-    MDFN_Internal_Args[x].description = _(sit->second.desc->description);
-    MDFN_Internal_Args[x].var = NULL;
-    MDFN_Internal_Args[x].subs = (void *)HokeyPokeyFallDown;
-    MDFN_Internal_Args[x].substype = SUBSTYPE_FUNCTION;
-    x++;
-  }
-  MDFN_Internal_Args[x].name = NULL;
+ for(sit = settings->begin(); sit != settings->end(); sit++)
+ {
+  MDFN_Internal_Args[x].name = strdup(sit->second.name);
+  MDFN_Internal_Args[x].description = _(sit->second.desc->description);
   MDFN_Internal_Args[x].var = NULL;
-  MDFN_Internal_Args[x].subs = NULL;
+  MDFN_Internal_Args[x].subs = (void *)HokeyPokeyFallDown;
+  MDFN_Internal_Args[x].substype = SUBSTYPE_FUNCTION;
+  x++;
+ }
+ MDFN_Internal_Args[x].name = NULL;
+ MDFN_Internal_Args[x].var = NULL;
+ MDFN_Internal_Args[x].subs = NULL;
 }
 
 static int netconnect = 0;
-static char * loadcd = NULL;
+static char* loadcd = NULL;	// Deprecated
+static int physcd = 0;
+
 static char * force_module_arg = NULL;
 static int DoArgs(int argc, char *argv[], char **filename)
 {
-  int ShowCLHelp = 0;
-  int DoSetRemote = 0;
+	int ShowCLHelp = 0;
 
-  char *dsfn = NULL;
-  char *dmfn = NULL;
+	char *dsfn = NULL;
+	char *dmfn = NULL;
+	char *dummy_remote = NULL;
 
-  ARGPSTRUCT MDFNArgs[] = 
-  {
-    { "help", _("Show help!"), &ShowCLHelp, 0, 0 },
-    { "remote", _("Enable remote mode(EXPERIMENTAL AND INCOMPLETE)."), &DoSetRemote, 0, 0 },
+        ARGPSTRUCT MDFNArgs[] = 
+	{
+	 { "help", _("Show help!"), &ShowCLHelp, 0, 0 },
+	 { "remote", _("Enable remote mode with the specified stdout key(EXPERIMENTAL AND INCOMPLETE)."), 0, &dummy_remote, SUBSTYPE_STRING_ALLOC },
 
-    { "loadcd", _("Load and boot a CD for the specified system."), 0, &loadcd, SUBSTYPE_STRING_ALLOC },
+	 // -loadcd is deprecated and only still supported because it's been around for yeaaaars.
+	 { "loadcd", NULL/*_("Load and boot a CD for the specified system.")*/, 0, &loadcd, SUBSTYPE_STRING_ALLOC },
 
-    { "force_module", _("Force usage of specified emulation module."), 0, &force_module_arg, SUBSTYPE_STRING_ALLOC },
+	 { "physcd", _("Load and boot from a physical CD, treating [FILE] as the optional device name."), &physcd, 0, 0 },
 
-    { "soundrecord", _("Record sound output to the specified filename in the MS WAV format."), 0,&soundrecfn, SUBSTYPE_STRING_ALLOC },
-    { "qtrecord", _("Record video and audio output to the specified filename in the QuickTime format."), 0, &qtrecfn, SUBSTYPE_STRING_ALLOC }, // TODOC: Video recording done without filtering applied.
+	 { "force_module", _("Force usage of specified emulation module."), 0, &force_module_arg, SUBSTYPE_STRING_ALLOC },
 
-    { "dump_settings_def", _("Dump settings definition data to specified file."), 0, &dsfn, SUBSTYPE_STRING_ALLOC },
-    { "dump_modules_def", _("Dump modules definition data to specified file."), 0, &dmfn, SUBSTYPE_STRING_ALLOC },
+	 { "soundrecord", _("Record sound output to the specified filename in the MS WAV format."), 0,&soundrecfn, SUBSTYPE_STRING_ALLOC },
+	 { "qtrecord", _("Record video and audio output to the specified filename in the QuickTime format."), 0, &qtrecfn, SUBSTYPE_STRING_ALLOC }, // TODOC: Video recording done without filtering applied.
 
-    { 0, NULL, (int *)MDFN_Internal_Args, 0, 0},
+	 { "dump_settings_def", _("Dump settings definition data to specified file."), 0, &dsfn, SUBSTYPE_STRING_ALLOC },
+	 { "dump_modules_def", _("Dump modules definition data to specified file."), 0, &dmfn, SUBSTYPE_STRING_ALLOC },
 
-    { "connect", _("Connect to the remote server and start network play."), &netconnect, 0, 0 },
+         { 0, NULL, (int *)MDFN_Internal_Args, 0, 0},
 
-    { 0, 0, 0, 0 }
-  };
+	 { "connect", _("Connect to the remote server and start network play."), &netconnect, 0, 0 },
 
-  const char *usage_string = _("Usage: %s [OPTION]... [FILE]\n");
-  if(argc <= 1)
-  {
-    printf(_("No command-line arguments specified.\n\n"));
-    printf(usage_string, argv[0]);
-    printf(_("\tPlease refer to the documentation for option parameters and usage.\n\n"));
-    return(0);
-  }
-  else
-  {
-    if(!ParseArguments(argc - 1, &argv[1], MDFNArgs, filename))
-      return(0);
+	 { 0, 0, 0, 0 }
+        };
 
-    if(ShowCLHelp)
-    {
-      printf(usage_string, argv[0]);
-      ShowArgumentsHelp(MDFNArgs, false);
-      printf("\n");
-      printf(_("Each setting(listed in the documentation) can also be passed as an argument by prefixing the name with a hyphen,\nand specifying the value to change the setting to as the next argument.\n\n"));
-      printf(_("For example:\n\t%s -pce.xres 1680 -pce.yres 1050 -pce.stretch aspect -pce.pixshader ipsharper \"Hyper Bonk Soldier.pce\"\n\n"), argv[0]);
-      printf(_("Settings specified in this manner are automatically saved to the configuration file, hence they\ndo not need to be passed to future invocations of the Mednafen executable.\n"));
-      printf("\n");
-      return(0);
-    }
+	const char *usage_string = _("Usage: %s [OPTION]... [FILE]\n");
+	if(argc <= 1)
+	{
+	 printf(_("No command-line arguments specified.\n\n"));
+	 printf(usage_string, argv[0]);
+	 printf(_("\tPlease refer to the documentation for option parameters and usage.\n\n"));
+	 return(0);
+	}
+	else
+	{
+	 if(!ParseArguments(argc - 1, &argv[1], MDFNArgs, filename))
+	  return(0);
 
-    if(dsfn)
-      MDFNI_DumpSettingsDef(dsfn);
+	 if(dummy_remote)
+	 {
+	  free(dummy_remote);
+	  dummy_remote = NULL;
+	 }
 
-    if(dmfn)
-      MDFNI_DumpModulesDef(dmfn);
+	 if(ShowCLHelp)
+	 {
+          printf(usage_string, argv[0]);
+          ShowArgumentsHelp(MDFNArgs, false);
+	  printf("\n");
+	  printf(_("Each setting(listed in the documentation) can also be passed as an argument by prefixing the name with a hyphen,\nand specifying the value to change the setting to as the next argument.\n\n"));
+	  printf(_("For example:\n\t%s -pce.stretch aspect -pce.pixshader autoipsharper \"Hyper Bonk Soldier.pce\"\n\n"), argv[0]);
+	  printf(_("Settings specified in this manner are automatically saved to the configuration file, hence they\ndo not need to be passed to future invocations of the Mednafen executable.\n"));
+	  printf("\n");
+	  return(0);
+	 }
 
-    if(dsfn || dmfn)
-      return(0);
+	 if(dsfn)
+	  MDFNI_DumpSettingsDef(dsfn);
 
-    if(*filename == NULL && loadcd == NULL)
-    {
-      puts(_("No game filename specified!"));
-      return(0);
-    }
-  }
-  return(1);
+	 if(dmfn)
+	  MDFNI_DumpModulesDef(dmfn);
+
+	 if(dsfn || dmfn)
+	  return(0);
+
+	 if(*filename == NULL && loadcd == NULL && physcd == 0)
+	 {
+	  MDFN_PrintError(_("No game filename specified!"));
+	  return(0);
+	 }
+	}
+	return(1);
 }
 
 #ifndef WII
-static volatile int NeedVideoChange = 0;
+static int volatile NeedVideoChange = 0;
 #else
-volatile int NeedVideoChange = 0;
+int volatile NeedVideoChange = 0;
 #endif
 int GameLoop(void *arg);
-volatile int GameThreadRun = 0;
-void MDFND_Update(MDFN_Surface *surface, int16 *Buffer, int Count);
+int volatile GameThreadRun = 0;
+bool MDFND_Update(MDFN_Surface *surface, MDFN_Rect *rect, MDFN_Rect *lw, int16 *Buffer, int Count);
 
 bool sound_active;	// true if sound is enabled and initialized
 
@@ -862,151 +841,191 @@ static int LoadGame(const char *force_module, const char *path)
 int LoadGame(const char *force_module, const char *path)
 #endif
 {
-  MDFNGI *tmp;
+	MDFNGI *tmp;
 
-  CloseGame();
+	CloseGame();
 
-  pending_save_state = 0;
-  pending_save_movie = 0;
-  pending_snapshot = 0;
+	pending_save_state = 0;
+	pending_save_movie = 0;
+	pending_snapshot = 0;
+	pending_ssnapshot = 0;
 
-  if(loadcd)
-  {
-    const char *system = loadcd;
+	if(physcd)
+	{
+	 if(!(tmp = MDFNI_LoadCD(force_module, path, true)))
+		return(0);
+	}
+	else if(loadcd)	// Deprecated
+	{
+	 const char *system = loadcd;
+         bool is_physical = false;
 
-    if(!system)
-      system = force_module;
+	 if(!system)
+	  system = force_module;
 
-    if(!(tmp = MDFNI_LoadCD(system, path)))
-      return(0);
-  }
-  else
-  {
-    if(!(tmp=MDFNI_LoadGame(force_module, path)))
-      return 0;
-  }
-  CurGame = tmp;
-  InitGameInput(tmp);
+	 if(path == NULL)
+	  is_physical = true;
+	 else
+	 {
+	  int sr;
+	  //int se;
+	  struct stat sb;
 
-  RefreshThrottleFPS(1);
+	  sr = stat(path, &sb);
+	  //se = errno;	  
 
-#ifndef WII
-  SDL_mutexP(VTMutex);
-  NeedVideoChange = -1;
-  SDL_mutexV(VTMutex);
+	  if(!sr && !S_ISREG(sb.st_mode))
+	  //if(sr || !S_ISREG(sb.st_mode))
+	   is_physical = true;
+	 }
 
-  if(SDL_ThreadID() != MainThreadID)
-    while(NeedVideoChange)
-    {
-      SDL_Delay(1);
-    }
-#endif
-    sound_active = 0;
+	 if(!(tmp = MDFNI_LoadCD(system, path, is_physical)))
+		return(0);
+	}
+	else
+	{
+         if(!(tmp=MDFNI_LoadGame(force_module, path)))
+	  return 0;
+	}
+	CurGame = tmp;
+	InitGameInput(tmp);
 
-    if(MDFN_GetSettingB("sound"))
-      sound_active = InitSound(tmp);
-
-    if(MDFN_GetSettingB("autosave"))
-      MDFNI_LoadState(NULL, "mcq");
-
-#ifndef WII
-    if(netconnect)
-      MDFND_NetworkConnect();
-#endif
-
-    ers.SetEmuClock(CurGame->MasterClock >> 32);
-
-    GameThreadRun = 1;
-#ifndef WII
-    GameThread = SDL_CreateThread(GameLoop, NULL);
-#endif
-    ffnosound = MDFN_GetSettingB("ffnosound");
+        RefreshThrottleFPS(1);
 
 #ifndef WII
-    if(qtrecfn)
-    {
-      // MDFNI_StartAVRecord() needs to be called after MDFNI_Load(Game/CD)
-      if(!MDFNI_StartAVRecord(qtrecfn, GetSoundRate()))
-      {
-        free(qtrecfn);
-        qtrecfn = NULL;
+        SDL_mutexP(VTMutex);
+        NeedVideoChange = -1;
+        SDL_mutexV(VTMutex);
 
-        return(0);
-      }
-    }
+        if(SDL_ThreadID() != MainThreadID)
+          while(NeedVideoChange)
+	  {
+           SDL_Delay(1);
+	  }
+#endif
+	sound_active = 0;
 
-    if(soundrecfn)
-    {
-      if(!MDFNI_StartWAVRecord(soundrecfn, GetSoundRate()))
-      {
-        free(soundrecfn);
-        soundrecfn = NULL;
+        sc_blit_timesync = MDFN_GetSettingB("video.blit_timesync");
 
-        return(0);
-      }
-    }
+	if(MDFN_GetSettingB("sound"))
+	 sound_active = InitSound(tmp);
+
+        if(MDFN_GetSettingB("autosave"))
+	 MDFNI_LoadState(NULL, "mcq");
+
+#ifndef WII
+	if(netconnect)
+	 MDFND_NetworkConnect();
 #endif
 
-    return 1;
+	ers.SetEmuClock(CurGame->MasterClock >> 32);
+
+        #ifdef WANT_DEBUGGER
+        MemDebugger_Init();
+	if(MDFN_GetSettingB("debugger.autostepmode"))
+	{
+	 Debugger_Toggle();
+	 Debugger_ForceSteppingMode();
+	}
+        #endif
+
+#ifndef WII
+	if(qtrecfn)
+	{
+	// MDFNI_StartAVRecord() needs to be called after MDFNI_Load(Game/CD)
+         if(!MDFNI_StartAVRecord(qtrecfn, GetSoundRate()))
+	 {
+	  free(qtrecfn);
+	  qtrecfn = NULL;
+
+	  return(0);
+	 }
+	}
+
+        if(soundrecfn)
+        {
+ 	 if(!MDFNI_StartWAVRecord(soundrecfn, GetSoundRate()))
+         {
+          free(soundrecfn);
+          soundrecfn = NULL;
+
+	  return(0);
+         }
+        }
+#endif
+
+	ffnosound = MDFN_GetSettingB("ffnosound");
+
+	//
+	// Game thread creation should come lastish.
+	//
+	GameThreadRun = 1;
+#ifndef WII
+	GameThread = SDL_CreateThread(GameLoop, NULL);
+#endif
+
+	return 1;
 }
 
 /* Closes a game and frees memory. */
 int CloseGame(void)
 {
-  if(!CurGame) return(0);
+	if(!CurGame) return(0);
 
-  GameThreadRun = 0;
+	GameThreadRun = 0;
 
 #ifndef WII
-  SDL_WaitThread(GameThread, NULL);
+	SDL_WaitThread(GameThread, NULL);
 
-  if(qtrecfn)	// Needs to be before MDFNI_Closegame() for now
-    MDFNI_StopAVRecord();
+        if(qtrecfn)	// Needs to be before MDFNI_Closegame() for now
+         MDFNI_StopAVRecord();
 
-  if(soundrecfn)
-    MDFNI_StopWAVRecord();
+        if(soundrecfn)
+         MDFNI_StopWAVRecord();
 #endif
 
-  if(MDFN_GetSettingB("autosave"))
-    MDFNI_SaveState(NULL, "mcq", NULL, NULL, NULL);
+	if(MDFN_GetSettingB("autosave"))
+	 MDFNI_SaveState(NULL, "mcq", NULL, NULL, NULL);
 
-  MDFNI_CloseGame();
+	MDFND_NetworkClose();
 
-  KillGameInput();
+	MDFNI_CloseGame();
+
+        KillGameInput();
 #ifndef WII
-  KillSound();
+	KillSound();
 #endif
 
-  CurGame = NULL;
+	CurGame = NULL;
 
-  return(1);
+	return(1);
 }
 
 static void GameThread_HandleEvents(void);
 #ifndef WII
-static volatile int NeedExitNow = 0;
+static int volatile NeedExitNow = 0;
 #endif
 double CurGameSpeed = 1;
 
 void MainRequestExit(void)
 {
 #ifndef WII
-  NeedExitNow = 1;
+ NeedExitNow = 1;
 #endif
 }
 
-bool InFrameAdvance = 0;
-bool NeedFrameAdvance = 0;
+static bool InFrameAdvance = 0;
+static bool NeedFrameAdvance = 0;
 
 void DoRunNormal(void)
 {
-  InFrameAdvance = 0;
+ InFrameAdvance = 0;
 }
 
 void DoFrameAdvance(void)
 {
-  InFrameAdvance = 1;
-  NeedFrameAdvance = 1;
+ InFrameAdvance = 1;
+ NeedFrameAdvance = 1;
 }
 
 static int GameLoopPaused = 0;
@@ -1014,263 +1033,278 @@ static int GameLoopPaused = 0;
 #ifndef WII
 void DebuggerFudge(void)
 {
-  LockGameMutex(0);
+          LockGameMutex(0);
 
-  int MeowCowHowFlown = VTBackBuffer;
+#if 0
+	  bool VBValid = true;
 
-  // FIXME.
-  if(!VTDisplayRects[VTBackBuffer].h)
-    VTDisplayRects[VTBackBuffer].h = 10;
-  if(!VTDisplayRects[VTBackBuffer].w)
-    VTDisplayRects[VTBackBuffer].w = 10;
+	  if(VTDisplayRects[VTBackBuffer].h == 0 || ((int64)VTDisplayRects[VTBackBuffer].y + VTDisplayRects[VTBackBuffer].h) > VTBuffer[VTBackBuffer]->h)
+	   VBValid = false;
+	  else if(VTLineWidths[VTBackBuffer][0].w != ~0)
+	  {
+	   for(int32 y = VTDisplayRects[VTBackBuffer].y; y < (VTDisplayRects[VTBackBuffer].y + VTDisplayRects[VTBackBuffer].h); y++)
+	   {
+	    if(VTLineWidths[VTBackBuffer][y].w == 0 || ((int64)VTLineWidths[VTBackBuffer][y].x + VTLineWidths[VTBackBuffer][y].w) > VTBuffer[VTBackBuffer]->w)
+	    {
+	     VBValid = false;
+	     break;
+	    }
+	   }
+	  }
+	  else if(VTDisplayRects[VTBackBuffer].w == 0 || ((int64)VTDisplayRects[VTBackBuffer].x + VTDisplayRects[VTBackBuffer].w) > VTBuffer[VTBackBuffer]->w)
+	   VBValid = false;
 
-  MDFND_Update((MDFN_Surface *)VTBuffer[VTBackBuffer], NULL, 0);
-  VTBackBuffer = MeowCowHowFlown;
+	  if(VBValid)
+           MDFND_Update((MDFN_Surface *)VTBuffer[VTBackBuffer], (MDFN_Rect*)&VTDisplayRects[VTBackBuffer], (MDFN_Rect*)VTLineWidths[VTBackBuffer], NULL, 0);
+	  else
+#endif
+	  {
+	   MDFND_Update((MDFN_Surface *)VTBuffer[VTBackBuffer ^ 1], (MDFN_Rect*)&VTDisplayRects[VTBackBuffer ^ 1], (MDFN_Rect*)VTLineWidths[VTBackBuffer ^ 1], NULL, 0);
+	  }
 
-  if(sound_active)
-    WriteSoundSilence(10);
-  else
-    SDL_Delay(10);
+	  if(sound_active)
+	   WriteSoundSilence(10);
+	  else
+	   SDL_Delay(10);
 
-  LockGameMutex(1);
+	  LockGameMutex(1);
 }
 #endif
 
 int64 Time64(void)
 {
 #ifdef WII
-  return SDL_GetTicks() * 1000;
+ return SDL_GetTicks() * 1000;
 #else
-  static bool cgt_fail_warning = 0;
+ static bool cgt_fail_warning = 0;
 
-#if HAVE_CLOCK_GETTIME && ( _POSIX_MONOTONIC_CLOCK > 0 || defined(CLOCK_MONOTONIC))
-  struct timespec tp;
+ #if HAVE_CLOCK_GETTIME && ( _POSIX_MONOTONIC_CLOCK > 0 || defined(CLOCK_MONOTONIC))
+ struct timespec tp;
 
-  if(clock_gettime(CLOCK_MONOTONIC, &tp) == -1)
-  {
-    if(!cgt_fail_warning)
-      printf("clock_gettime() failed: %s\n", strerror(errno));
-    cgt_fail_warning = 1;
-  }
-  else
-    return((int64)tp.tv_sec * 1000000 + tp.tv_nsec / 1000);
+ if(clock_gettime(CLOCK_MONOTONIC, &tp) == -1)
+ {
+  if(!cgt_fail_warning)
+   fprintf(stderr, "clock_gettime() failed: %s\n", strerror(errno));
+  cgt_fail_warning = 1;
+ }
+ else
+  return((int64)tp.tv_sec * 1000000 + tp.tv_nsec / 1000);
 
-#else
-#warning "clock_gettime() with CLOCK_MONOTONIC not available"
-#endif
+ #else
+   #warning "clock_gettime() with CLOCK_MONOTONIC not available"
+ #endif
 
 
-#if HAVE_GETTIMEOFDAY
-  // Warning: gettimeofday() is not guaranteed to be monotonic!!
-  struct timeval tv;
+ #if HAVE_GETTIMEOFDAY
+ // Warning: gettimeofday() is not guaranteed to be monotonic!!
+ struct timeval tv;
 
-  if(gettimeofday(&tv, NULL) == -1)
-  {
-    puts("gettimeofday() error");
-    return(0);
-  }
+ if(gettimeofday(&tv, NULL) == -1)
+ {
+  fprintf(stderr, "gettimeofday() error");
+  return(0);
+ }
 
-  return((int64)tv.tv_sec * 1000000 + tv.tv_usec);
-#else
-#warning "gettimeofday() not available!!!"
-#endif
+ return((int64)tv.tv_sec * 1000000 + tv.tv_usec);
+ #else
+  #warning "gettimeofday() not available!!!"
+ #endif
 
-  // Yeaaah, this isn't going to work so well.
-  return((int64)time(NULL) * 1000000);
+ // Yeaaah, this isn't going to work so well.
+ return((int64)time(NULL) * 1000000);
 #endif
 }
 
 int GameLoop(void *arg)
 {
-  int sskip = 0;
-  while(GameThreadRun)
-  {
-    int16 *sound;
-    int32 ssize;
-    int fskip;
-
+	while(GameThreadRun)
+	{
+         int16 *sound;
+         int32 ssize;
+         int fskip;
+        
 #ifndef WII
-    /* If we requested a new video mode, wait until it's set before calling the emulation code again.
-    */
-    while(NeedVideoChange)
-    {
-      if(!GameThreadRun) return(1);	// Might happen if video initialization failed
-      SDL_Delay(1);
-    }
+	 /* If we requested a new video mode, wait until it's set before calling the emulation code again.
+	 */
+	 while(NeedVideoChange)
+	 {
+	  if(!GameThreadRun) return(1);	// Might happen if video initialization failed
+	  SDL_Delay(1);
+	  }
+         do
+         {
+	  if(InFrameAdvance && !NeedFrameAdvance)
+	  {
+	   SDL_Delay(10);
+	  }
+	 } while(InFrameAdvance && !NeedFrameAdvance);
 
-    do
-    {
-      if(InFrameAdvance && !NeedFrameAdvance)
-      {
-        SDL_Delay(10);
-      }
-    } while(InFrameAdvance && !NeedFrameAdvance);
-
-    if(MDFNDnetplay && !(NoWaiting & 0x2))	// TODO: Hacky, clean up.
-      ers.SetETtoRT();
+	 if(MDFNDnetplay && !(NoWaiting & 0x2))	// TODO: Hacky, clean up.
+	  ers.SetETtoRT();
 #endif
 
-    fskip = ers.NeedFrameSkip();
-
+	 fskip = ers.NeedFrameSkip();
+	
 #ifdef WII
-    if( !emuRegistry.getCurrentEmulator()->getAppliedFrameSkip() )
+	 if( !emuRegistry.getCurrentEmulator()->getAppliedFrameSkip() ) // FIXME WIIFIX Out of date?
 #else
-    if(!MDFN_GetSettingB("video.frameskip"))
+	 if(!MDFN_GetSettingB("video.frameskip"))
 #endif
-      fskip = 0;
+	  fskip = 0;
 
-    if(pending_snapshot || pending_save_state || pending_save_movie || NeedFrameAdvance)
-      fskip = 0;
+	 if(pending_ssnapshot || pending_snapshot || pending_save_state || pending_save_movie || NeedFrameAdvance)
+	  fskip = 0;
 
-    NeedFrameAdvance = 0;
+ 	 NeedFrameAdvance = 0;
 
-    if(NoWaiting)
-      fskip = 1;
+         if(NoWaiting)
+	  fskip = 1;
 
-    VTLineWidths[VTBackBuffer][0].w = ~0;
+	 VTLineWidths[VTBackBuffer][0].w = ~0;
 
-    int ThisBackBuffer = VTBackBuffer;
+	 int ThisBackBuffer = VTBackBuffer;
 
-    LockGameMutex(1);
-    {
-      EmulateSpecStruct espec;
-      memset(&espec, 0, sizeof(EmulateSpecStruct));
+	 LockGameMutex(1);
+	 {
+	  EmulateSpecStruct espec;
+ 	  memset(&espec, 0, sizeof(EmulateSpecStruct));
 
-      espec.surface = (MDFN_Surface *)VTBuffer[VTBackBuffer];
-      espec.LineWidths = (MDFN_Rect *)VTLineWidths[VTBackBuffer];
-      espec.skip = fskip;
-      espec.soundmultiplier = CurGameSpeed;
-      espec.NeedRewind = DNeedRewind;
+          espec.surface = (MDFN_Surface *)VTBuffer[VTBackBuffer];
+          espec.LineWidths = (MDFN_Rect *)VTLineWidths[VTBackBuffer];
+	  espec.skip = fskip;
+	  espec.soundmultiplier = CurGameSpeed;
+	  espec.NeedRewind = DNeedRewind;
 
-      espec.SoundRate = GetSoundRate();
-      espec.SoundBuf = GetEmuModSoundBuffer(&espec.SoundBufMaxSize);
-      if( sskip != -1 )
-      {
-        espec.SoundVolume = 0;
-        if( sskip++ == 10 )
-        {
-          sskip = -1;
-          espec.SoundFormatChanged = true;
-          espec.VideoFormatChanged = true;
-        }        
-      }
-      else
-      {
+ 	  espec.SoundRate = GetSoundRate();
+	  espec.SoundBuf = GetEmuModSoundBuffer(&espec.SoundBufMaxSize);
 #ifndef WII
-        espec.SoundVolume = (double)MDFN_GetSettingUI("sound.volume") / 100;
+ 	  espec.SoundVolume = (double)MDFN_GetSettingUI("sound.volume") / 100;
 #else
-        espec.SoundVolume = 
-          ((float)emuRegistry.getCurrentEmulator()->getAppliedVolume()) / 100;
+	  espec.SoundVolume =  // FIXME WIIFIX out of date?
+	    ((float)emuRegistry.getCurrentEmulator()->getAppliedVolume()) / 100;
 #endif
-      }
 
-      int64 before_time = Time64();
-      int64 after_time;
+	  int64 before_time = Time64();
+	  int64 after_time;
 
-      static double average_time = 0;
+	  static double average_time = 0;
 
-      MDFNI_Emulate(&espec);
+          MDFNI_Emulate(&espec);
 
-      after_time = Time64();
+	  after_time = Time64();
 
-      average_time += ((after_time - before_time) - average_time) * 0.10;
+          average_time += ((after_time - before_time) - average_time) * 0.10;
 
-      assert(espec.MasterCycles);
-      ers.AddEmuTime((espec.MasterCycles - espec.MasterCyclesALMS) / CurGameSpeed);
+          assert(espec.MasterCycles);
+	  ers.AddEmuTime((espec.MasterCycles - espec.MasterCyclesALMS) / CurGameSpeed);
 
-      //printf("%lld %f\n", (long long)(after_time - before_time), average_time);
+	  //printf("%lld %f\n", (long long)(after_time - before_time), average_time);
 
-      VTDisplayRects[VTBackBuffer] = espec.DisplayRect;
+	  VTDisplayRects[VTBackBuffer] = espec.DisplayRect;
 
-      sound = espec.SoundBuf + (espec.SoundBufSizeALMS * CurGame->soundchan);
-      ssize = espec.SoundBufSize - espec.SoundBufSizeALMS;
-    }
+	  sound = espec.SoundBuf + (espec.SoundBufSizeALMS * CurGame->soundchan);
+	  ssize = espec.SoundBufSize - espec.SoundBufSizeALMS;
+	 }
+	 LockGameMutex(0);
+	 FPS_IncVirtual();
+	 if(!fskip)
+	  FPS_IncDrawn();
 
-    LockGameMutex(0);
-    FPS_IncVirtual();
-    if(!fskip)
-      FPS_IncDrawn();
 
-    do
-    {
-#ifndef WII
-      GameThread_HandleEvents();
-#endif
-      VTBackBuffer = ThisBackBuffer;
-      MDFND_Update(fskip ? NULL : (MDFN_Surface *)VTBuffer[ThisBackBuffer], sound, ssize);
-      if((InFrameAdvance && !NeedFrameAdvance) || GameLoopPaused)
-      {
-        if(ssize)
-          for(int x = 0; x < CurGame->soundchan * ssize; x++)
-            sound[x] = 0;
-      }
-    } while(((InFrameAdvance && !NeedFrameAdvance) || GameLoopPaused) && GameThreadRun);
-  }
-  return(1);
+	 do
+	 {
+	  VTBackBuffer = ThisBackBuffer;
+
+ 	  if(fskip && GameLoopPaused)
+	  {
+	   // If this frame was skipped, and the game loop is paused(IE cheat interface is active), just blit the previous "successful" frame so the cheat
+	   // interface actually gets drawn.
+	   //
+	   // Needless to say, do not do "VTBackBuffer ^= 1;" here.
+	   //
+	   // Possible problems with this kludgery:
+	   //	Will fail spectacularly if there is no previous successful frame.  BOOOOOOM.  (But there always should be, especially since we initialize some
+  	   //   of the video buffer and rect structures during startup)
+	   //
+           MDFND_Update((MDFN_Surface *)VTBuffer[VTBackBuffer ^ 1], (MDFN_Rect*)&VTDisplayRects[VTBackBuffer ^ 1], (MDFN_Rect*)VTLineWidths[VTBackBuffer ^ 1], sound, ssize);
+	  }
+	  else
+	  {
+           if(MDFND_Update(fskip ? NULL : (MDFN_Surface *)VTBuffer[VTBackBuffer], (MDFN_Rect*)&VTDisplayRects[VTBackBuffer], (MDFN_Rect*)VTLineWidths[VTBackBuffer], sound, ssize))
+	    VTBackBuffer ^= 1;
+	  }
+
+          if((InFrameAdvance && !NeedFrameAdvance) || GameLoopPaused)
+	  {
+           if(ssize)
+	    for(int x = 0; x < CurGame->soundchan * ssize; x++)
+	     sound[x] = 0;
+	  }
+	 } while(((InFrameAdvance && !NeedFrameAdvance) || GameLoopPaused) && GameThreadRun);
+	}
+	return(1);
 }   
 
 char *GetBaseDirectory(void)
 {
 #ifndef WII
-  char *ol;
-  char *ret;
+ char *ol;
+ char *ret;
 
-  ol = getenv("MEDNAFEN_HOME");
-  if(ol != NULL && ol[0] != 0)
-  {
-    ret = strdup(ol);
-    return(ret);
-  }
-
-  ol = getenv("HOME");
-
-  if(ol)
-  {
-    ret=(char *)malloc(strlen(ol)+1+strlen("/.mednafen"));
-    strcpy(ret,ol);
-    strcat(ret,"/.mednafen");
-    return(ret);
-  }
-
-#if defined(HAVE_GETUID) && defined(HAVE_GETPWUID)
-  {
-    struct passwd *psw;
-
-    psw = getpwuid(getuid());
-
-    if(psw != NULL && psw->pw_dir[0] != 0 && strcmp(psw->pw_dir, "/dev/null"))
-    {
-      ret = (char *)malloc(strlen(psw->pw_dir) + 1 + strlen("/.mednafen"));
-      strcpy(ret, psw->pw_dir);
-      strcat(ret, "/.mednafen");
-      return(ret);
-    }
-  }
-#endif
-
-#ifdef WIN32
-  {
-    char *sa;
-
-    ret=(char *)malloc(MAX_PATH+1);
-    GetModuleFileName(NULL,ret,MAX_PATH+1);
-
-    sa=strrchr(ret,'\\');
-    if(sa)
-      *sa = 0;
-    return(ret);
-  }
-#endif
-
-  ret = (char *)malloc(1);
-  ret[0] = 0;
+ ol = getenv("MEDNAFEN_HOME");
+ if(ol != NULL && ol[0] != 0)
+ {
+  ret = strdup(ol);
   return(ret);
+ }
+
+ ol = getenv("HOME");
+
+ if(ol)
+ {
+  ret=(char *)malloc(strlen(ol)+1+strlen("/.mednafen"));
+  strcpy(ret,ol);
+  strcat(ret,"/.mednafen");
+  return(ret);
+ }
+
+ #if defined(HAVE_GETUID) && defined(HAVE_GETPWUID)
+ {
+  struct passwd *psw;
+
+  psw = getpwuid(getuid());
+
+  if(psw != NULL && psw->pw_dir[0] != 0 && strcmp(psw->pw_dir, "/dev/null"))
+  {
+   ret = (char *)malloc(strlen(psw->pw_dir) + 1 + strlen("/.mednafen"));
+   strcpy(ret, psw->pw_dir);
+   strcat(ret, "/.mednafen");
+   return(ret);
+  }
+ }
+ #endif
+
+ #ifdef WIN32
+ {
+  char *sa;
+
+  ret=(char *)malloc(MAX_PATH+1);
+  GetModuleFileName(NULL,ret,MAX_PATH+1);
+
+  sa=strrchr(ret,'\\');
+  if(sa)
+   *sa = 0;
+  return(ret);
+ }
+ #endif
+
+ ret = (char *)malloc(1);
+ ret[0] = 0;
+ return(ret);
 #else
-  return wii_get_base_dir();
+ return wii_get_base_dir();
 #endif
 }
-
-static volatile int (*EventHook)(const SDL_Event *event) = 0;
 
 static const int gtevents_size = 2048; // Must be a power of 2.
 static volatile SDL_Event gtevents[gtevents_size];
@@ -1281,166 +1315,326 @@ static volatile int gte_write = 0;
 #ifndef WII
 static void GameThread_HandleEvents(void)
 {
-  SDL_Event gtevents_temp[gtevents_size];
-  int numevents = 0;
+ SDL_Event gtevents_temp[gtevents_size];
+ unsigned int numevents = 0;
 
-  SDL_mutexP(EVMutex);
-  while(gte_read != gte_write)
+ SDL_mutexP(EVMutex);
+ while(gte_read != gte_write)
+ {
+  memcpy(&gtevents_temp[numevents], (void *)&gtevents[gte_read], sizeof(SDL_Event));
+
+  numevents++;
+  gte_read = (gte_read + 1) & (gtevents_size - 1);
+ }
+ SDL_mutexV(EVMutex);
+
+ for(unsigned int i = 0; i < numevents; i++)
+ {
+  SDL_Event *event = &gtevents_temp[i];
+
+  switch(event->type)
   {
-    memcpy(&gtevents_temp[numevents], (void *)&gtevents[gte_read], sizeof(SDL_Event));
-
-    numevents++;
-    gte_read = (gte_read + 1) & (gtevents_size - 1);
+   case SDL_USEREVENT:
+		switch(event->user.code)
+		{
+		 case CEVT_SET_INPUT_FOCUS:
+			MDFNDHaveFocus = (bool)((char*)event->user.data1 - (char*)0);
+			//printf("%u\n", MDFNDHaveFocus);
+			break;
+		}
+		break;
   }
-  SDL_mutexV(EVMutex);
 
-  for(int i = 0; i < numevents; i++)
-  {
-    SDL_Event *event = &gtevents_temp[i];
-
-    if(EventHook)
-      EventHook(event);
-
-    NetplayEventHook_GT(event);
-  }
-  SDL_mutexV(EVMutex);
+  Input_Event(event);
+  NetplayEventHook_GT(event);
+ }
+ SDL_mutexV(EVMutex);
 }
 #endif
 
 void PauseGameLoop(bool p)
 {
-  GameLoopPaused = p;
+ GameLoopPaused = p;
 }
 
 
 void SendCEvent(unsigned int code, void *data1, void *data2)
 {
 #ifndef WII
-  SDL_Event evt;
-  evt.user.type = SDL_USEREVENT;
-  evt.user.code = code;
-  evt.user.data1 = data1;
-  evt.user.data2 = data2;
-  SDL_PushEvent(&evt);
+ SDL_Event evt;
+ evt.user.type = SDL_USEREVENT;
+ evt.user.code = code;
+ evt.user.data1 = data1;
+ evt.user.data2 = data2;
+ SDL_PushEvent(&evt);
 #endif
+}
+
+void SendCEvent_to_GT(unsigned int code, void *data1, void *data2)
+{
+	// FIXME WIIFIX should this be defined out on the wii?
+ SDL_Event evt;
+ evt.user.type = SDL_USEREVENT;
+ evt.user.code = code;
+ evt.user.data1 = data1;
+ evt.user.data2 = data2;
+
+ SDL_mutexP(EVMutex);
+ memcpy((void *)&gtevents[gte_write], &evt, sizeof(SDL_Event));
+ gte_write = (gte_write + 1) & (gtevents_size - 1);
+ SDL_mutexV(EVMutex);
 }
 
 void SDL_MDFN_ShowCursor(int toggle)
 {
 #ifndef WII
-  int *toog = (int *)malloc(sizeof(int));
-  *toog = toggle;
+ int *toog = (int *)malloc(sizeof(int));
+ *toog = toggle;
 
-  SDL_Event evt;
-  evt.user.type = SDL_USEREVENT;
-  evt.user.code = CEVT_SHOWCURSOR;
-  evt.user.data1 = toog;
-  SDL_PushEvent(&evt);
+ SDL_Event evt;
+ evt.user.type = SDL_USEREVENT;
+ evt.user.code = CEVT_SHOWCURSOR;
+ evt.user.data1 = toog;
+ SDL_PushEvent(&evt);
 #endif
+
 }
 
 void GT_ToggleFS(void)
 {
 #ifndef WII
-  SDL_mutexP(VTMutex);
+ SDL_mutexP(VTMutex);
 #endif
-  NeedVideoChange = 1;
+ NeedVideoChange = 1;
 #ifndef WII
-  SDL_mutexV(VTMutex);
+ SDL_mutexV(VTMutex);
+#endif
 
-  if(SDL_ThreadID() != MainThreadID)
-    while(NeedVideoChange)
-    {
-      SDL_Delay(1);
-    }
+#ifndef WII
+ if(SDL_ThreadID() != MainThreadID)
+  while(NeedVideoChange)
+  {
+   SDL_Delay(1);
+  }
 #endif
 }
 
 void GT_ReinitVideo(void)
 {
 #ifndef WII
-  SDL_mutexP(VTMutex);
+ SDL_mutexP(VTMutex);
 #endif
-  NeedVideoChange = -1;
+ NeedVideoChange = -1;
 #ifndef WII
-  SDL_mutexV(VTMutex);
+ SDL_mutexV(VTMutex);
 
-  if(SDL_ThreadID() != MainThreadID)
+ if(SDL_ThreadID() != MainThreadID)
+ {
+  while(NeedVideoChange)
   {
-    while(NeedVideoChange)
-    {
-      SDL_Delay(1);
-    }
+   SDL_Delay(1);
   }
+ }
 #endif
 }
 
 static bool krepeat = 0;
-
-void MainSetEventHook(int (*eh)(const SDL_Event *event))
+void PumpWrap(void)
 {
-  EventHook = (volatile int (*)(const SDL_Event *))eh;
+ SDL_Event event;
+ SDL_Event gtevents_temp[gtevents_size];
+ int numevents = 0;
+
+ bool NITI;
+
+ NITI = Netplay_IsTextInput();
+
+ if(Debugger_IsActive() || NITI || IsConsoleCheatConfigActive() || Help_IsActive())
+ {
+  if(!krepeat)
+   SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
+  krepeat = 1;
+ }
+ else
+ {
+  if(krepeat)
+   SDL_EnableKeyRepeat(0, 0);
+  krepeat = 0;
+ }
+
+ #if defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
+ if(SignalSafeExitWanted)
+  NeedExitNow = true;
+ #endif
+
+ while(SDL_PollEvent(&event))
+ {
+  if(Debugger_IsActive())
+   Debugger_Event(&event);
+  else 
+   if(IsConsoleCheatConfigActive())
+    CheatEventHook(&event);
+
+  NetplayEventHook(&event);
+
+  /* Handle the event, and THEN hand it over to the GUI. Order is important due to global variable mayhem(CEVT_TOGGLEFS. */
+  switch(event.type)
+  {
+   case SDL_ACTIVEEVENT:
+   			if(event.active.state & SDL_APPINPUTFOCUS)
+			{
+			 SendCEvent_to_GT(CEVT_SET_INPUT_FOCUS, (char*)0 + (bool)event.active.gain, NULL);
+			}
+
+			if(event.active.state & SDL_APPACTIVE)
+			{
+			 VideoAppActive((bool)(event.active.gain));
+			}
+			break;
+
+   case SDL_SYSWMEVENT: break;
+   //case SDL_VIDEORESIZE: //if(VideoResize(event.resize.w, event.resize.h))
+			 // NeedVideoChange = -1;
+   //			 break;
+
+   case SDL_VIDEOEXPOSE: break;
+   case SDL_QUIT: NeedExitNow = 1;break;
+   case SDL_USEREVENT:
+		switch(event.user.code)
+		{
+		 case CEVT_SET_STATE_STATUS: MT_SetStateStatus((StateStatusStruct *)event.user.data1); break;
+                 case CEVT_SET_MOVIE_STATUS: MT_SetMovieStatus((StateStatusStruct *)event.user.data1); break;
+		 case CEVT_WANT_EXIT:
+		     if(!Netplay_TryTextExit())
+		     {
+		      SDL_Event evt;
+		      evt.quit.type = SDL_QUIT;
+		      SDL_PushEvent(&evt);
+		     }
+		     break;
+	         case CEVT_SET_GRAB_INPUT:
+                         SDL_WM_GrabInput(*(int *)event.user.data1 ? SDL_GRAB_ON : SDL_GRAB_OFF);
+                         free(event.user.data1);
+                         break;
+		 //case CEVT_TOGGLEFS: NeedVideoChange = 1; break;
+		 //case CEVT_VIDEOSYNC: NeedVideoChange = -1; break;
+		 case CEVT_SHOWCURSOR: SDL_ShowCursor(*(int *)event.user.data1); free(event.user.data1); break;
+	  	 case CEVT_DISP_MESSAGE: VideoShowMessage((UTF8*)event.user.data1); break;
+		 default: 
+			if(numevents < gtevents_size)
+			{
+			 memcpy(&gtevents_temp[numevents], &event, sizeof(SDL_Event));
+			 numevents++;
+			}
+			break;
+		}
+		break;
+   default: 
+           if(numevents < gtevents_size)
+           {
+            memcpy(&gtevents_temp[numevents], &event, sizeof(SDL_Event));
+            numevents++;
+           }
+	   break;
+  }
+ }
+
+ SDL_mutexP(EVMutex);
+ for(int i = 0; i < numevents; i++)
+ {
+  memcpy((void *)&gtevents[gte_write], &gtevents_temp[i], sizeof(SDL_Event));
+  gte_write = (gte_write + 1) & (gtevents_size - 1);
+ }
+ SDL_mutexV(EVMutex);
+
+ if(!CurGame)
+  GameThread_HandleEvents();
 }
-
-#ifndef WII
-static volatile int JoyModeChange = 0;
-#else
-volatile int JoyModeChange = 0;
-#endif
-
-void SetJoyReadMode(int mode)	// 0 for events, 1 for manual function calling to update.
-{
-#ifndef WII
-  SDL_mutexP(VTMutex);
-#endif
-  JoyModeChange = mode | 0x8;
-#ifndef WII
-  SDL_mutexV(VTMutex);
-
-  /* Only block if we're calling this from within the game loop(it is also called from within LoadGame(), called in the main loop). */
-  if(SDL_ThreadID() != MainThreadID) //if(GameThread && (SDL_ThreadID() != SDL_GetThreadID(GameThread))) - oops, race condition with the setting of GameThread, possibly...
-    while(JoyModeChange && GameThreadRun)
-      SDL_Delay(1);
-#endif
-}
-
 
 bool MT_FromRemote_SoundSync(void)
 {
-  bool ret = TRUE;
+ bool ret = TRUE;
 
-  GameThreadRun = 0;
+ GameThreadRun = 0;
 #ifndef WII
-  SDL_WaitThread(GameThread, NULL);
+ SDL_WaitThread(GameThread, NULL);
 #endif
 
-  KillSound();
-  sound_active = 0;
+ KillSound();
+ sound_active = 0;
 
-  if(MDFN_GetSettingB("sound"))
-  {
-    sound_active = InitSound(CurGame);
-    if(!sound_active)
-      ret = FALSE;
-  }
-  GameThreadRun = 1;
+ if(MDFN_GetSettingB("sound"))
+ {
+  sound_active = InitSound(CurGame);
+  if(!sound_active)
+   ret = FALSE;
+ }
+ GameThreadRun = 1;
 #ifndef WII
-  GameThread = SDL_CreateThread(GameLoop, NULL);
+ GameThread = SDL_CreateThread(GameLoop, NULL);
 #endif
 
-  return(ret);
+ return(ret);
+}
+
+bool MT_FromRemote_VideoSync(void)
+{
+          KillVideo();
+
+          //memset(VTBuffer[0], 0, CurGame->pitch * CurGame->fb_height);
+          //memset(VTBuffer[1], 0, CurGame->pitch * CurGame->fb_height);
+
+          if(!InitVideo(CurGame))
+	   return(0);
+	  return(1);
 }
 
 void RefreshThrottleFPS(double multiplier)
 {
-  CurGameSpeed = multiplier;
+        CurGameSpeed = multiplier;
+}
+
+void PrintCompilerVersion(void)
+{
+ #if defined(__GNUC__)
+  MDFN_printf(_("Compiled with gcc %s\n"), __VERSION__);
+ #endif
 }
 
 void PrintSDLVersion(void)
 {
-  const SDL_version *sver = SDL_Linked_Version();
+ const SDL_version *sver = SDL_Linked_Version();
 
-  MDFN_printf(_("Compiled against SDL %u.%u.%u, running with SDL %u.%u.%u\n\n"), SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL, sver->major, sver->minor, sver->patch);
+ MDFN_printf(_("Compiled against SDL %u.%u.%u, running with SDL %u.%u.%u\n"), SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL, sver->major, sver->minor, sver->patch);
+}
+
+#ifdef HAVE_LIBSNDFILE
+ #include <sndfile.h>
+#endif
+
+void PrintLIBSNDFILEVersion(void)
+{
+ #ifdef HAVE_LIBSNDFILE
+  MDFN_printf(_("Running with %s\n"), sf_version_string());
+ #endif
+}
+
+void PrintZLIBVersion(void)
+{
+ #ifdef ZLIB_VERSION
+  MDFN_printf(_("Compiled against zlib %s, running with zlib %s\n"), ZLIB_VERSION, zlibVersion());
+ #endif
+}
+
+void PrintLIBCDIOVersion(void)
+{
+ #ifdef HAVE_LIBCDIO
+  #if LIBCDIO_VERSION_NUM < 83
+  const char *cdio_version_string = "(unknown)";
+  #endif
+
+  MDFN_printf(_("Compiled against libcdio %s, running with libcdio %s\n"), CDIO_VERSION, cdio_version_string);
+ #endif
 }
 
 int sdlhaveogl = 0;
@@ -1450,335 +1644,636 @@ int sdlhaveogl = 0;
 #if 0//#ifdef WIN32
 char *GetFileDialog(void)
 {
-  OPENFILENAME ofn;
-  char returned_fn[2048];
-  std::string filter;
-  bool first_extension = true;
+ OPENFILENAME ofn;
+ char returned_fn[2048];
+ std::string filter;
+ bool first_extension = true;
 
-  filter = std::string("Recognized files");
-  filter.push_back(0);
+ filter = std::string("Recognized files");
+ filter.push_back(0);
 
-  for(unsigned int i = 0; i < MDFNSystems.size(); i++)
+ for(unsigned int i = 0; i < MDFNSystems.size(); i++)
+ {
+  if(MDFNSystems[i]->FileExtensions)
   {
-    if(MDFNSystems[i]->FileExtensions)
-    {
-      const FileExtensionSpecStruct *fesc = MDFNSystems[i]->FileExtensions;
+   const FileExtensionSpecStruct *fesc = MDFNSystems[i]->FileExtensions;
 
-      while(fesc->extension && fesc->description)
-      {
-        if(!first_extension)
-          filter.push_back(';');
+   while(fesc->extension && fesc->description)
+   {
+    if(!first_extension)
+     filter.push_back(';');
 
-        filter.push_back('*');
-        filter += std::string(fesc->extension);
+    filter.push_back('*');
+    filter += std::string(fesc->extension);
 
-        first_extension = false;
-        fesc++;
-      }
-    }
+    first_extension = false;
+    fesc++;
+   }
   }
+ }
 
-  filter.push_back(0);
-  filter.push_back(0);
+ filter.push_back(0);
+ filter.push_back(0);
 
-  //fwrite(filter.data(), 1, filter.size(), stdout);
+ //fwrite(filter.data(), 1, filter.size(), stdout);
 
-  memset(&ofn, 0, sizeof(ofn));
+ memset(&ofn, 0, sizeof(ofn));
 
-  ofn.lStructSize = sizeof(ofn);
-  ofn.lpstrTitle = "Mednafen Open File";
-  ofn.lpstrFilter = filter.data();
+ ofn.lStructSize = sizeof(ofn);
+ ofn.lpstrTitle = "Mednafen Open File";
+ ofn.lpstrFilter = filter.data();
 
-  ofn.nMaxFile = sizeof(returned_fn);
-  ofn.lpstrFile = returned_fn;
+ ofn.nMaxFile = sizeof(returned_fn);
+ ofn.lpstrFile = returned_fn;
 
-  ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+ ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
 
-  if(GetOpenFileName(&cxzofn))
-    return(strdup(returned_fn));
-
-  return(NULL);
+ if(GetOpenFileName(&ofn))
+  return(strdup(returned_fn));
+ 
+ return(NULL);
 }
 #endif
+
+
+int main(int argc, char *argv[])
+{
+#if 0
+	// Special helper mode. (TODO)
+	if(argc == 3 && !strcmp(argv[1], "-joy_config_helper"))
+	{
+	 int fd = atoi(argv[2]);
+	 int64 ltime = MDFND_GetTime();
+
+	 if(SDL_Init(0))
+	 {
+	  fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
+	  return(-1);
+	 }
+	 SDL_JoystickEventState(SDL_IGNORE);
+
+ 	 joy_manager = new JoystickManager();
+	 joy_manager->SetAnalogThreshold(0.75);
+
+	 for(;;)
+	 {
+	  char command[256];
+	  if(0)
+	  {
+	   if(!strcasecmp(command, "reset"))
+	    joy_manager->Reset_BC_ChangeCheck();
+	   else if(!strcasecmp(command, "detect_analog_buttons"))
+	    joy_manager->DetectAnalogButtonsForChangeCheck();
+	   else if(!strcasecmp(command, "exit"))
+	    break;
+	  }
+
+
+	  while((MDFND_GetTime() - ltime) < 15)
+	   MDFND_Sleep(1);
+	  ltime += 15;
+	 }
+
+	 delete joy_manager;
+	 joy_manager = NULL;	 
+	 return(0);
+	}
+#endif
+	std::vector<MDFNGI *> ExternalSystems;
+	char *needie = NULL;
+
+	MDFNDHaveFocus = false;
+
+	DrBaseDirectory=GetBaseDirectory();
+
+	#ifdef ENABLE_NLS
+	setlocale(LC_ALL, "");
+
+	#ifdef WIN32
+        bindtextdomain(PACKAGE, DrBaseDirectory);
+	#else
+	bindtextdomain(PACKAGE, LOCALEDIR);
+	#endif
+
+	bind_textdomain_codeset(PACKAGE, "UTF-8");
+	textdomain(PACKAGE);
+	#endif
+
+	if(argc >= 3 && (!strcasecmp(argv[1], "-remote") || !strcasecmp(argv[1], "--remote")))
+	{
+         RemoteOn = TRUE;
+ 	 InitSTDIOInterface(argv[2]);
+	}
+
+	MDFNI_printf(_("Starting Mednafen %s\n"), MEDNAFEN_VERSION);
+	MDFN_indent(1);
+
+        MDFN_printf(_("Build information:\n"));
+        MDFN_indent(2);
+        PrintCompilerVersion();
+        PrintZLIBVersion();
+        PrintSDLVersion();
+        PrintLIBSNDFILEVersion();
+	PrintLIBCDIOVersion();
+        MDFN_indent(-2);
+
+        MDFN_printf(_("Base directory: %s\n"), DrBaseDirectory);
+
+	if(SDL_Init(SDL_INIT_VIDEO)) /* SDL_INIT_VIDEO Needed for (joystick config) event processing? */
+	{
+	 fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
+	 MDFNI_Kill();
+	 return(-1);
+	}
+	SDL_JoystickEventState(SDL_IGNORE);
+
+	if(!(StdoutMutex = SDL_CreateMutex()))
+	{
+	 MDFN_PrintError(_("Could not create mutex: %s\n"), SDL_GetError());
+	 MDFNI_Kill();
+	 return(-1);
+	}
+
+        MainThreadID = SDL_ThreadID();
+
+        // Look for external emulation modules here.
+
+	if(!MDFNI_InitializeModules(ExternalSystems))
+	 return(-1);
+
+	for(unsigned int x = 0; x < sizeof(DriverSettings) / sizeof(MDFNSetting); x++)
+	 NeoDriverSettings.push_back(DriverSettings[x]);
+
+	MakeDebugSettings(NeoDriverSettings);
+	MakeVideoSettings(NeoDriverSettings);
+	MakeInputSettings(NeoDriverSettings);
+
+        if(!MDFNI_Initialize(DrBaseDirectory, NeoDriverSettings))
+         return(-1);
+
+        SDL_EnableUNICODE(1);
+
+        #if defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
+        SetSignals(CloseStuff);
+        #endif
+
+	if(!CreateDirs())
+	{
+	 ErrnoHolder ene(errno);	// TODO: Maybe we should have CreateDirs() return this instead?
+
+	 MDFN_PrintError(_("Error creating directories: %s\n"), ene.StrError());
+	 MDFNI_Kill();
+	 return(-1);
+	}
+
+	MakeMednafenArgsStruct();
+
+	#if 0 //def WIN32
+	if(argc > 1 || !(needie = GetFileDialog()))
+	#endif
+	if(!DoArgs(argc,argv, &needie))
+	{
+	 MDFNI_Kill();
+	 DeleteInternalArgs();
+	 KillInputSettings();
+	 return(-1);
+	}
+
+        if(!getenv("__GL_SYNC_TO_VBLANK"))
+	{
+ 	 if(MDFN_GetSettingB("video.glvsync"))
+	 {
+	  #if HAVE_PUTENV
+	  static char gl_pe_string[] = "__GL_SYNC_TO_VBLANK=1";
+	  putenv(gl_pe_string); 
+	  #elif HAVE_SETENV
+	  setenv("__GL_SYNC_TO_VBLANK", "1", 0);
+	  #endif
+	 }
+         else
+         {
+	  #if HAVE_PUTENV
+	  static char gl_pe_string[] = "__GL_SYNC_TO_VBLANK=0";
+	  putenv(gl_pe_string); 
+	  #elif HAVE_SETENV
+	  setenv("__GL_SYNC_TO_VBLANK", "0", 0);
+	  #endif
+         }
+	}
+
+	/* Now the fun begins! */
+	/* Run the video and event pumping in the main thread, and create a 
+	   secondary thread to run the game in(and do sound output, since we use
+	   separate sound code which should be thread safe(?)).
+	*/
+	int ret = 0;
+
+	//InitVideo(NULL);
+
+	VTMutex = SDL_CreateMutex();
+        EVMutex = SDL_CreateMutex();
+	GameMutex = SDL_CreateMutex();
+
+	VTReady = NULL;
+	VTDRReady = NULL;
+	VTLWReady = NULL;
+
+	NeedVideoChange = -1;
+
+	joy_manager = new JoystickManager();
+	joy_manager->SetAnalogThreshold(MDFN_GetSettingF("analogthreshold") / 100);
+	InitCommandInput();
+
+	NeedExitNow = 0;
+
+	#if 0
+	{
+	 long start_ticks = SDL_GetTicks();
+
+	 for(int i = 0; i < 65536; i++)
+	  MDFN_GetSettingB("gg.forcemono");
+
+	 printf("%ld\n", SDL_GetTicks() - start_ticks);
+	}
+	#endif
+
+
+        if(LoadGame(force_module_arg, needie))
+        {
+	 uint32 pitch32 = CurGame->fb_width; 
+	 //uint32 pitch32 = round_up_pow2(CurGame->fb_width);
+	 MDFN_PixelFormat nf(MDFN_COLORSPACE_RGB, 0, 8, 16, 24);
+
+	 VTBuffer[0] = new MDFN_Surface(NULL, CurGame->fb_width, CurGame->fb_height, pitch32, nf);
+         VTBuffer[1] = new MDFN_Surface(NULL, CurGame->fb_width, CurGame->fb_height, pitch32, nf);
+         VTLineWidths[0] = (MDFN_Rect *)calloc(CurGame->fb_height, sizeof(MDFN_Rect));
+         VTLineWidths[1] = (MDFN_Rect *)calloc(CurGame->fb_height, sizeof(MDFN_Rect));
+
+         for(int i = 0; i < 2; i++)
+	 {
+          ((MDFN_Surface *)VTBuffer[i])->Fill(0, 0, 0, 0);
+
+	  //
+	  // Debugger step mode, and cheat interface, rely on the previous backbuffer being valid in certain situations.  Initialize some stuff here so that
+	  // reliance will still work even immediately after startup.
+	  VTDisplayRects[i].w = std::min<int32>(16, VTBuffer[i]->w);
+	  VTDisplayRects[i].h = std::min<int32>(16, VTBuffer[i]->h);
+	  VTLineWidths[i][0].w = ~0;
+	 }
+
+         NeedVideoChange = -1;
+         FPS_Init();
+        }
+	else
+	{
+	 ret = -1;
+	 NeedExitNow = 1;
+	}
+
+	while(!NeedExitNow)
+	{
+	 bool DidVideoChange = false;
+
+	 if(RemoteOn)
+	  CheckForSTDIOMessages();
+
+	 SDL_mutexP(VTMutex);	/* Lock mutex */
+
+         if(NeedVideoChange)
+         {
+          KillVideo();
+
+          if(NeedVideoChange == -1)
+          {
+           if(!InitVideo(CurGame))
+           {
+	    ret = -1;
+            NeedExitNow = 1;
+            break;
+           }
+          }
+          else
+          {
+           MDFNI_SetSettingB("video.fs", !MDFN_GetSettingB("video.fs"));
+
+           if(!InitVideo(CurGame))
+           {
+            MDFNI_SetSettingB("video.fs", !MDFN_GetSettingB("video.fs"));
+            InitVideo(CurGame);
+           }
+          }
+
+	  DidVideoChange = true;
+          NeedVideoChange = 0;
+         }
+
+         if(VTReady)
+         {
+	  //static int last_time;
+	  //int curtime;
+
+          BlitScreen(VTReady, VTDRReady, VTLWReady, VTSSnapshot);
+
+          //curtime = SDL_GetTicks();
+          //printf("%d\n", curtime - last_time);
+          //last_time = curtime;
+
+          VTReady = NULL;
+         }
+
+	 PumpWrap();
+	 if(DidVideoChange)	// Do it after PumpWrap() in case there are stale SDL_ActiveEvent in the SDL event queue.
+	  SendCEvent_to_GT(CEVT_SET_INPUT_FOCUS, (char*)0 + (bool)(SDL_GetAppState() & SDL_APPINPUTFOCUS), NULL);
+
+         SDL_mutexV(VTMutex);   /* Unlock mutex */
+         SDL_Delay(1);
+	}
+
+	CloseGame();
+
+	SDL_DestroyMutex(VTMutex);
+        SDL_DestroyMutex(EVMutex);
+
+	for(int x = 0; x < 2; x++)
+	{
+	 if(VTBuffer[x])
+	 {
+	  delete VTBuffer[x];
+	  VTBuffer[x] = NULL;
+	 }
+
+	 if(VTLineWidths[x])
+	 {
+	  free(VTLineWidths[x]);
+	  VTLineWidths[x] = NULL;
+	 }
+	}
+
+	#if defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
+	SetSignals(SIG_IGN);
+	#endif
+
+	KillCommandInput();
+
+        MDFNI_Kill();
+
+	delete joy_manager;
+	joy_manager = NULL;
+
+	KillVideo();
+
+	SDL_Quit();
+
+	DeleteInternalArgs();
+	KillInputSettings();
+
+        return(ret);
+}
+
+
 
 static uint32 last_btime = 0;
-
-#if 0
-// Throttle and check for frame skip
-static int ThrottleCheckFS(void)
-{
-  int needskip = 0;
-  bool nothrottle = MDFN_GetSettingB("nothrottle");
-
-waiter:
-
-  ttime=SDL_GetTicks();
-  ttime*=10000;
-
-  if((ttime - ltime) < (tfreq / desiredfps ))
-  {
-    if(!sound_active && !NoWaiting && !nothrottle && GameThreadRun)
-    {
-      int64 delay;
-      delay = (((tfreq/desiredfps)-(ttime-ltime)) / 10000) - 1;
-
-      if(delay >= 0)
-        SDL_Delay(delay);
-
-      goto waiter;
-    }
-  }
-
-  if(!MDFNDnetplay)
-  {
-    if(((ttime-ltime) >= (1.5*tfreq/desiredfps)))
-    {
-      //MDFN_DispMessage("%8d %8d %8d, %8d", ttime, ltime, ttime-ltime, tfreq / desiredfps);
-      if(skipcount < 4 || (CurGameSpeed > 1 && skipcount < CurGameSpeed))     // Only skip four frames in a row at maximum.
-      {
-        skipcount ++;
-        needskip = 1;
-      } else skipcount = 0;
-      if(!sound_active)    // Only adjust base time if sound is disabled.
-      {
-        if((ttime-ltime) >= ((uint64)3.0*tfreq/desiredfps))
-          ltime=ttime;
-        else
-          ltime += tfreq / desiredfps;
-      }
-    }
-    else
-      ltime+=tfreq/desiredfps;
-  }
-
-  return(needskip);
-}
-#endif
-
 static void UpdateSoundSync(int16 *Buffer, int Count)
 {
-  if(Count)
+ if(Count)
+ {
+  if(ffnosound && CurGameSpeed != 1)
   {
-    if(ffnosound && CurGameSpeed != 1)
-    {
-      for(int x = 0; x < Count * CurGame->soundchan; x++)
-        Buffer[x] = 0;
-    }
-    int32 max = GetWriteSound();
-    if(Count > max)
-    {
-      if(NoWaiting)
-        Count = max;
-    }
-    if(Count >= (max * 0.95))
-    {
-      ers.SetETtoRT();
-    }
-
-    WriteSound(Buffer, Count);
-
-#ifndef WII
-    if(MDFNDnetplay && GetWriteSound() >= Count * 1.00) // Cheap code to fix sound buffer underruns due to accumulation of timer error during netplay.
-    {
-      int16 zbuf[128 * 2];
-      for(int x = 0; x < 128 * 2; x++) zbuf[x] = 0;
-      int t = GetWriteSound();
-      t /= CurGame->soundchan;
-      while(t > 0) 
-      {
-        WriteSound(zbuf, (t > 128 ? 128 : t));
-        t -= 128;
-      }
-      ers.SetETtoRT();
-    }
-#endif
+   for(int x = 0; x < Count * CurGame->soundchan; x++)
+    Buffer[x] = 0;
   }
-  else
+  int32 max = GetWriteSound();
+  if(Count > max)
   {
-    bool nothrottle = MDFN_GetSettingB("nothrottle");
+   if(NoWaiting)
+    Count = max;
+  }
+  if(Count >= (max * 0.95))
+  {
+   ers.SetETtoRT();
+  }
+
+  WriteSound(Buffer, Count);
+
+  //printf("%u\n", GetWriteSound());
 #ifndef WII
-    if(!NoWaiting && !nothrottle && GameThreadRun && !MDFNDnetplay)
+  if(MDFNDnetplay && GetWriteSound() >= Count * 1.00) // Cheap code to fix sound buffer underruns due to accumulation of timer error during netplay.
+  {
+   int16 zbuf[128 * 2];
+
+   for(int x = 0; x < 128 * 2; x++)
+    zbuf[x] = 0;
+
+   int t = GetWriteSound();
+
+   while(t > 0)
+   {
+    WriteSound(zbuf, (t > 128 ? 128 : t));
+    t -= 128;
+   }
+   ers.SetETtoRT();
+  }
+#endif
+ }
+ else
+ {
+  bool nothrottle = MDFN_GetSettingB("nothrottle");
+
+#ifndef WII
+  if(!NoWaiting && !nothrottle && GameThreadRun && !MDFNDnetplay)
 #else
-    if(!NoWaiting && !nothrottle && GameThreadRun )
+  if(!NoWaiting && !nothrottle && GameThreadRun)
 #endif
-    {
-      ers.Sync();
-    }
-  }
+   ers.Sync();
+ }
 }
 
 void MDFND_MidSync(const EmulateSpecStruct *espec)
 {
-  ers.AddEmuTime((espec->MasterCycles - espec->MasterCyclesALMS) / CurGameSpeed, false);
+ ers.AddEmuTime((espec->MasterCycles - espec->MasterCyclesALMS) / CurGameSpeed, false);
 
-  UpdateSoundSync(espec->SoundBuf + (espec->SoundBufSizeALMS * CurGame->soundchan), espec->SoundBufSize - espec->SoundBufSizeALMS);
-  MDFND_UpdateInput(true, false);
+ UpdateSoundSync(espec->SoundBuf + (espec->SoundBufSizeALMS * CurGame->soundchan), espec->SoundBufSize - espec->SoundBufSizeALMS);
+
+ // TODO(once we can ensure it's safe): GameThread_HandleEvents();
+ MDFND_UpdateInput(true, false);
 }
 
-extern SDL_mutex *prerender_mutex;
-
-void MDFND_Update(MDFN_Surface *surface, int16 *Buffer, int Count)
+static bool PassBlit(MDFN_Surface *surface, MDFN_Rect *rect, MDFN_Rect *lw)
 {
-  UpdateSoundSync(Buffer, Count);
-  MDFND_UpdateInput();
+ bool ret = false;
 
-  if(surface)
+  /* If it's been >= 100ms since the last blit, assume that the blit
+     thread is being time-slice starved, and let it run.  This is especially necessary
+     for fast-forwarding to respond well(since keyboard updates are
+     handled in the main thread) on slower systems or when using a higher fast-forwarding speed ratio.
+  */
+ if(surface)
+ {
+  if((last_btime + 100) < SDL_GetTicks() || pending_ssnapshot)
   {
-#ifndef WII
-    if(pending_snapshot)
-      MDFNI_SaveSnapshot(surface, (MDFN_Rect *)&VTDisplayRects[VTBackBuffer], (MDFN_Rect *)VTLineWidths[VTBackBuffer]);
-
-    if(pending_save_state || pending_save_movie)
-      LockGameMutex(1);
-
-    if(pending_save_state)
-      MDFNI_SaveState(NULL, NULL, surface, (MDFN_Rect *)&VTDisplayRects[VTBackBuffer], (MDFN_Rect *)VTLineWidths[VTBackBuffer]);
-
-    if(pending_save_movie)
-      MDFNI_SaveMovie(NULL, surface, (MDFN_Rect *)&VTDisplayRects[VTBackBuffer], (MDFN_Rect *)VTLineWidths[VTBackBuffer]);
-
-    if(pending_save_state || pending_save_movie)
-      LockGameMutex(0);
-#endif
-
-    pending_save_movie = pending_snapshot = pending_save_state = 0;
-
-    /* If it's been >= 100ms since the last blit, assume that the blit
-    thread is being time-slice starved, and let it run.  This is especially necessary
-    for fast-forwarding to respond well(since keyboard updates are
-    handled in the main thread) on slower systems or when using a higher fast-forwarding speed ratio.
-    */
-#ifndef WII
-    if( (last_btime + 100) < SDL_GetTicks())
-    {
-      //puts("Eep");
-      while(VTReady && GameThreadRun) SDL_Delay(1);
-    }
-#endif
-
-    //if(!VTReady)
-    //{
-      VTLWReady = VTLineWidths[VTBackBuffer];
-      VTDRReady = &VTDisplayRects[VTBackBuffer];
-      VTReady = VTBuffer[VTBackBuffer];
-
-      VTBackBuffer ^= 1;
-      last_btime = SDL_GetTicks();
-      //FPS_IncBlitted();
-    //}
+   //puts("Eep");
+   while(VTReady && GameThreadRun) SDL_Delay(1);
   }
-#ifndef WII
-  else if(IsConsoleCheatConfigActive() && !VTReady)
+
+  if(!VTReady)
   {
-    VTBackBuffer ^= 1;
-    VTLWReady = VTLineWidths[VTBackBuffer];
-    VTReady = VTBuffer[VTBackBuffer];
-    VTBackBuffer ^= 1;
+   VTSSnapshot = pending_ssnapshot;
+   VTLWReady = lw;
+   VTDRReady = rect;
+   VTReady = surface;
+   ret = true;
+
+   pending_ssnapshot = 0;
+   last_btime = SDL_GetTicks();
+   FPS_IncBlitted();
   }
+ }
+
+ return(ret);
+}
+
+
+bool MDFND_Update(MDFN_Surface *surface, MDFN_Rect *rect, MDFN_Rect *lw, int16 *Buffer, int Count)
+{
+ bool ret = false;
+
+ if(false == sc_blit_timesync)
+ {
+  //puts("ABBYNORMAL");
+  ret |= PassBlit(surface, rect, lw);
+ }
+
+ UpdateSoundSync(Buffer, Count);
+
+ GameThread_HandleEvents();
+ MDFND_UpdateInput();
+
+ if(surface)
+ {
+#ifndef WII
+  if(pending_snapshot)
+   MDFNI_SaveSnapshot(surface, rect, lw);
+
+  if(pending_save_state || pending_save_movie)
+   LockGameMutex(1);
+
+  if(pending_save_state)
+   MDFNI_SaveState(NULL, NULL, surface, rect, lw);
+  if(pending_save_movie)
+   MDFNI_SaveMovie(NULL, surface, rect, lw);
+
+  if(pending_save_state || pending_save_movie)
+   LockGameMutex(0);
 #endif
+
+  pending_save_movie = pending_snapshot = pending_save_state = 0;
+ }
+
+ if(true == sc_blit_timesync)
+ {
+  //puts("NORMAL");
+  ret |= PassBlit(surface, rect, lw);
+ }
+
+ return(ret);
 }
 
 void MDFND_DispMessage(UTF8 *text)
 {
-
 #ifndef WII
-	  SendCEvent(CEVT_DISP_MESSAGE, text, NULL);
+ SendCEvent(CEVT_DISP_MESSAGE, text, NULL);
 #else
-	#ifdef WII_NETTRACE
-	  if( text )
-	    net_print_string( NULL, 0, "%s", text );
-	#endif
-	
+#ifdef WII_NETTRACE
+ if( text )
+	 net_print_string( NULL, 0, "%s", text );
+#endif
 
-	  if( text) free(text);
+ if( text) free(text); FIXME WIIFIX Out of date?
 #endif
 }
 
 void MDFND_SetStateStatus(StateStatusStruct *status)
 {
-  SendCEvent(CEVT_SET_STATE_STATUS, status, NULL);
+ SendCEvent(CEVT_SET_STATE_STATUS, status, NULL);
 }
 
 void MDFND_SetMovieStatus(StateStatusStruct *status)
 {
-  SendCEvent(CEVT_SET_MOVIE_STATUS, status, NULL);
+ SendCEvent(CEVT_SET_MOVIE_STATUS, status, NULL);
 }
 
 uint32 MDFND_GetTime(void)
 {
-  return(SDL_GetTicks());
+ return(SDL_GetTicks());
 }
 
 void MDFND_Sleep(uint32 ms)
 {
-  SDL_Delay(ms);
+ SDL_Delay(ms);
 }
 
 struct MDFN_Thread
 {
-  SDL_Thread *sdl_thread;
+ SDL_Thread *sdl_thread;
 };
 
 struct MDFN_Mutex
 {
-  SDL_mutex *sdl_mutex;
+ SDL_mutex *sdl_mutex;
 };
 
 MDFN_Thread *MDFND_CreateThread(int (*fn)(void *), void *data)
 {
-  MDFN_Thread *thread;
+ MDFN_Thread *thread;
 
-  if(!(thread = (MDFN_Thread *)calloc(1, sizeof(MDFN_Thread))))
-    return(NULL);
+ if(!(thread = (MDFN_Thread *)calloc(1, sizeof(MDFN_Thread))))
+  return(NULL);
 
-  if(!(thread->sdl_thread = SDL_CreateThread(fn, data)))
-  {
-    free(thread);
-    return(NULL);
-  }
+ if(!(thread->sdl_thread = SDL_CreateThread(fn, data)))
+ {
+  free(thread);
+  return(NULL);
+ }
 
-  return(thread);
+ return(thread);
 }
 
 void MDFND_WaitThread(MDFN_Thread *thread, int *status)
 {
-  SDL_WaitThread(thread->sdl_thread, status);
-}
-
-void MDFND_KillThread(MDFN_Thread *thread)
-{
-  SDL_KillThread(thread->sdl_thread);
+ SDL_WaitThread(thread->sdl_thread, status);
+ thread->sdl_thread = NULL;	// To make accidental use-after-free() more apparent.
+ free(thread);
 }
 
 MDFN_Mutex *MDFND_CreateMutex(void)
 {
-  MDFN_Mutex *mutex;
+ MDFN_Mutex *mutex;
 
-  if(!(mutex = (MDFN_Mutex *)calloc(1, sizeof(MDFN_Mutex))))
-    return(NULL);
+ if(!(mutex = (MDFN_Mutex *)calloc(1, sizeof(MDFN_Mutex))))
+  return(NULL);
 
-  if(!(mutex->sdl_mutex = SDL_CreateMutex()))
-  {
-    free(mutex);
-    return(NULL);
-  }
+ if(!(mutex->sdl_mutex = SDL_CreateMutex()))
+ {
+  free(mutex);
+  return(NULL);
+ }
 
-  return(mutex);
+ return(mutex);
 }
 
 void MDFND_DestroyMutex(MDFN_Mutex *mutex)
 {
-  SDL_DestroyMutex(mutex->sdl_mutex);
-  free(mutex);
+ SDL_DestroyMutex(mutex->sdl_mutex);
+ free(mutex);
 }
 
 int MDFND_LockMutex(MDFN_Mutex *mutex)
 {
-  return SDL_mutexP(mutex->sdl_mutex);
+ return SDL_mutexP(mutex->sdl_mutex);
 }
 
 int MDFND_UnlockMutex(MDFN_Mutex *mutex)
 {
-  return SDL_mutexV(mutex->sdl_mutex);
+ return SDL_mutexV(mutex->sdl_mutex);
 }
 

@@ -1056,7 +1056,7 @@ void v30mz_execute(int cycles)
   SETOLDCSIP();
 
   WSwan_InterruptCheck();
-  
+
   #ifdef WANT_DEBUGGER
   if(hookie_hickey)
   {

@@ -296,7 +296,7 @@ static void MMC5PRG(void)
 
 static DECLFW(Mapper5_write)
 {
- if(A >= 0x5120 && A<=0x5127)
+ if(A >= 0x5120 && A <= 0x5127)
  {
   MDFNPPU_LineUpdate();
   ABMode = 0;

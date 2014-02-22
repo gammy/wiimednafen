@@ -143,7 +143,7 @@ static void DoAYSQHQ(int x)
   for(V=CAYBC[x];V<SOUNDTS;V++)
   {
    if(dcount[x] & 0x10)
-    WaveHiEx[V]+=amp;
+    WaveHiEx[V] += amp;
 
    vcount[x]++;
    if(vcount[x] >= period)
@@ -151,7 +151,7 @@ static void DoAYSQHQ(int x)
     dcount[x] = (dcount[x] + 1) & 0x1F;
     vcount[x] = 0;
    }
-  } 
+  }
  }
  CAYBC[x]=SOUNDTS;
 }

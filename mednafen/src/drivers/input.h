@@ -2,10 +2,10 @@
 #define _MDFN_DRIVERS_INPUT_H
 
 typedef struct {
-  uint8  ButtType;
-  uint8  DeviceNum;;
-  uint32 ButtonNum;
-  uint64 DeviceID;
+        uint8  ButtType;
+        uint8  DeviceNum;
+        uint32 ButtonNum;
+	uint64 DeviceID;
 } ButtConfig;
 
 #define BUTTC_NONE		0x00
@@ -15,6 +15,9 @@ typedef struct {
 
 #define MKK(k) SDLK_##k
 #define MKK_COUNT (SDLK_LAST+1)
+
+void Input_Event(const SDL_Event *event);
+void MainSetEventHook(int (*eh)(const SDL_Event *event));	// TODO: factor out eventually.
 
 // Called after a game is loaded.
 void InitGameInput(MDFNGI *GI);

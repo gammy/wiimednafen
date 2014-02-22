@@ -63,14 +63,8 @@ static uint32 FixX(uint32 in_x)
 
  x = (int32)in_x + 98 - 32;
 
-
-#ifdef WII
- if(x < 98 - 32)
-  x = 98 - 32;
-#else
  if(x < 98)
   x = 98;
-#endif
 
  if(x > 242)
   x = 242;
@@ -81,15 +75,11 @@ static uint32 FixX(uint32 in_x)
 
 static void UpdateARKFC(void *data)
 {
-#ifndef WII
- uint32 *ptr=(uint32 *)data;
- FCArk.mzx=FixX(ptr[0]);
- FCArk.mzb=ptr[2]?1:0;
-#else
  uint8 *ptr = (uint8*)data;
- FCArk.mzx=FixX(MDFN_de32lsb(ptr + 0));
+
+ FCArk.mzx=FixX((int32)MDFN_de32lsb(ptr + 0) >> 16); // XXX WIIFIX??
+ // FCArk.mzx=FixX(MDFN_de32lsb(ptr + 0)); From wii-mednafen-read-only
  FCArk.mzb=ptr[4]?1:0;
-#endif
 }
 
 static int StateAction(int w, StateMem *sm, int load, int data_only)
@@ -127,7 +117,7 @@ static int StateActionFC(StateMem *sm, int load, int data_only)
 }
 
 
-static INPUTCFC ARKCFC={ReadARKFC,0,StrobeARKFC,UpdateARKFC,0,0, StateActionFC, 3, sizeof(uint32) };
+static INPUTCFC ARKCFC={ReadARKFC,0,StrobeARKFC,UpdateARKFC,0,0, StateActionFC };
 
 INPUTCFC *MDFN_InitArkanoidFC(void)
 {
@@ -162,11 +152,11 @@ static void UpdateARK(int w, void *data)
 {
  uint8 *ptr = (uint8*)data;
 
- NESArk[w].mzx=FixX(MDFN_de32lsb(ptr + 0));
+ NESArk[w].mzx=FixX((int32)MDFN_de32lsb(ptr + 0) >> 16);
  NESArk[w].mzb=ptr[4]?1:0;
 }
 
-static INPUTC ARKC={ReadARK, 0, StrobeARK, UpdateARK, 0, 0, StateAction, 3, sizeof(uint32) };
+static INPUTC ARKC={ReadARK, 0, StrobeARK, UpdateARK, 0, 0, StateAction };
 
 INPUTC *MDFN_InitArkanoid(int w)
 {

@@ -81,13 +81,13 @@ static void FreeNSF(void)
 {
  if(NSFInfo)
  {
-  if(NSFInfo->GameName) MDFN_free(NSFInfo->GameName);
-  if(NSFInfo->Artist) MDFN_free(NSFInfo->Artist);
-  if(NSFInfo->Copyright) MDFN_free(NSFInfo->Copyright);
-  if(NSFInfo->Ripper) MDFN_free(NSFInfo->Ripper);
-  if(NSFInfo->NSFDATA) MDFN_free(NSFInfo->NSFDATA);
-  if(ExWRAM) { MDFN_free(ExWRAM); ExWRAM = NULL; }
-  MDFN_free(NSFInfo);
+  if(NSFInfo->GameName) free(NSFInfo->GameName);
+  if(NSFInfo->Artist) free(NSFInfo->Artist);
+  if(NSFInfo->Copyright) free(NSFInfo->Copyright);
+  if(NSFInfo->Ripper) free(NSFInfo->Ripper);
+  if(NSFInfo->NSFDATA) free(NSFInfo->NSFDATA);
+  if(ExWRAM) { free(ExWRAM); ExWRAM = NULL; }
+  free(NSFInfo);
   NSFInfo = NULL;
  }
 
@@ -134,9 +134,9 @@ int LoadNSF(MDFNFILE *fp)
  // NULL-terminate strings just in case.
  NSFHeader.GameName[31] = NSFHeader.Artist[31] = NSFHeader.Copyright[31] = 0;
 
- NSFInfo->GameName = (UTF8*)MDFN_RemoveControlChars(strdup((char *)NSFHeader.GameName));
- NSFInfo->Artist = (UTF8 *)MDFN_RemoveControlChars(strdup((char *)NSFHeader.Artist));
- NSFInfo->Copyright = (UTF8 *)MDFN_RemoveControlChars(strdup((char *)NSFHeader.Copyright));
+ NSFInfo->GameName = MDFN_RemoveControlChars(strdup((char *)NSFHeader.GameName));
+ NSFInfo->Artist = MDFN_RemoveControlChars(strdup((char *)NSFHeader.Artist));
+ NSFInfo->Copyright = MDFN_RemoveControlChars(strdup((char *)NSFHeader.Copyright));
 
  MDFN_trim((char*)NSFInfo->GameName);
  MDFN_trim((char*)NSFInfo->Artist);
@@ -308,9 +308,9 @@ bool NSFLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
  gt->Reset = NSF_Reset;
  gt->Close = NSF_Close;
 
- Player_Init(NSFInfo->TotalSongs, NSFInfo->GameName ? NSFInfo->GameName : (UTF8*)"",
-				  NSFInfo->Artist ? NSFInfo->Artist : (UTF8*)"",
-				  NSFInfo->Copyright ? NSFInfo->Copyright : (UTF8*)"",
+ Player_Init(NSFInfo->TotalSongs, NSFInfo->GameName ? NSFInfo->GameName : "",
+				  NSFInfo->Artist ? NSFInfo->Artist : "",
+				  NSFInfo->Copyright ? NSFInfo->Copyright : "",
 				  NSFInfo->SongNames);
  return 1;
 }

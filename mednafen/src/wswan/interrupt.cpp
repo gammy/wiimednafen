@@ -106,10 +106,10 @@ uint32 WSwan_InterruptGetRegister(const unsigned int id, char *special, const ui
   case INT_GSREG_IVECTORBASE:
 	ret = IVectorBase;
 	break;
-  }
+ }
 
  if(special && (id == INT_GSREG_ISTATUS || id == INT_GSREG_IENABLE))
-   {
+ {
   trio_snprintf(special, special_len, "%s: %d, %s: %d, %s: %d, %s: %d, %s: %d, %s: %d, %s: %d, %s: %d",
 		PrettyINames[0], (ret >> 0) & 1,
 	        PrettyINames[1], (ret >> 1) & 1,
@@ -119,7 +119,7 @@ uint32 WSwan_InterruptGetRegister(const unsigned int id, char *special, const ui
 	        PrettyINames[5], (ret >> 5) & 1,
 	        PrettyINames[6], (ret >> 6) & 1,
 	        PrettyINames[7], (ret >> 7) & 1);
-   }
+ }
 
  return(ret);
 }
@@ -129,15 +129,15 @@ void WSwan_InterruptSetRegister(const unsigned int id, uint32 value)
  switch(id)
  {
   case INT_GSREG_ISTATUS:
-  IStatus = value;
+	IStatus = value;
 	break;
 
   case INT_GSREG_IENABLE:
-  IEnable = value;
+	IEnable = value;
 	break;
 
   case INT_GSREG_IVECTORBASE:
-  IVectorBase = value;
+	IVectorBase = value;
 	break;
  }
 

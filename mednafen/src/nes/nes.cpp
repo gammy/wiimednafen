@@ -36,9 +36,6 @@
 #include	"vsuni.h"
 #include	"debug.h"
 
-#include "Emulators.h"
-#include "wii_mednafen.h"
-#include "../settings-driver.h"
 
 extern MDFNGI EmulatedNES;
 
@@ -155,7 +152,7 @@ static void CloseGame(void)
  {
   if(GameInterface->Close)
    GameInterface->Close();
-  MDFN_free(GameInterface);
+  free(GameInterface);
   GameInterface = NULL;
  }
 
@@ -179,9 +176,7 @@ static void InitCommon(const char *name)
 
         MDFNGameInfo->cspecial = NULL;
         MDFNGameInfo->GameSetMD5Valid = FALSE;
-#ifdef WII
-        MDFNGameInfo->DesiredInput.clear();
-#endif
+
 
         if(MDFN_GetSettingB("nes.fnscan"))
         {
@@ -195,7 +190,7 @@ static void InitCommon(const char *name)
           MDFNGameInfo->VideoSystem = VIDSYS_PAL;
         }
 
-        GameInterface = (NESGameType *)MDFN_calloc(1, sizeof(NESGameType), "GameInterface");
+        GameInterface = (NESGameType *)calloc(1, sizeof(NESGameType));
 
         SetReadHandler(0x0000, 0xFFFF, ANull);
         SetWriteHandler(0x0000, 0xFFFF, BNull);
@@ -268,7 +263,7 @@ static int Load(const char *name, MDFNFILE *fp)
 
 	if(!LoadFunction(name, fp, GameInterface))
 	{
-	 MDFN_free(GameInterface);
+	 free(GameInterface);
 	 GameInterface = NULL;
 	 return(0);
 	}
@@ -298,11 +293,7 @@ static int Load(const char *name, MDFNFILE *fp)
 	if(NESIsVSUni)
 	 MDFN_VSUniInstallRWHooks();
 
-#ifdef WII
-    // Enable/disable Game Genie
-    MDFNI_SetSettingB( "nes.gg", 
-      emuRegistry.NesEmu.isGameGenieEnabled() );
-#endif
+
 	if(MDFNGameInfo->GameType != GMT_PLAYER)
          if(MDFN_GetSettingB("nes.gg"))
 	  Genie_Init();
@@ -317,6 +308,30 @@ static int Load(const char *name, MDFNFILE *fp)
 static void Emulate(EmulateSpecStruct *espec)
 {
  int ssize;
+
+#if 0
+ static bool firstcat = true;
+
+ MDFN_PixelFormat tmp_pf;
+
+ tmp_pf.Rshift = 0;
+ tmp_pf.Gshift = 0;
+ tmp_pf.Bshift = 0;
+ tmp_pf.Ashift = 8;
+
+ tmp_pf.Rprec = 0;
+ tmp_pf.Gprec = 0;
+ tmp_pf.Bprec = 0;
+ tmp_pf.Aprec = 0;
+
+ tmp_pf.bpp = 8;
+ tmp_pf.colorspace = MDFN_COLORSPACE_RGB;
+
+ espec->surface->SetFormat(tmp_pf, false);
+ espec->VideoFormatChanged = firstcat;
+ firstcat = false;
+#endif
+
 
  if(espec->VideoFormatChanged)
   MDFNNES_SetPixelFormat(espec->surface->format); //.Rshift, espec->surface->format.Gshift, espec->surface->format.Bshift);
@@ -465,20 +480,25 @@ static MDFNSetting NESSettings[] =
   { "nes.no8lim", MDFNSF_NOFLAGS, gettext_noop("Remove 8-sprites-per-scanline hardware limit."), 
 	gettext_noop("WARNING: Enabling this option will cause graphical glitches in some games, including \"Solstice\"."), MDFNST_BOOL, "0", NULL, NULL, NULL, NESPPU_SettingChanged },
 
-  { "nes.soundq", MDFNSF_NOFLAGS, gettext_noop("Sound quality."), NULL, MDFNST_INT, "0", "-2", "3" },
-  { "nes.sound_rate_error", MDFNSF_NOFLAGS, gettext_noop("Output rate tolerance."), NULL, MDFNST_FLOAT, "0.00004", "0.0000001", "0.01" },
+  { "nes.soundq", MDFNSF_NOFLAGS, gettext_noop("Sound quality."), gettext_noop("Higher values correspond to better SNR and better preservation of higher frequencies(\"brightness\"), at the cost of increased computational complexity and a negligible(<0.5ms) increase in latency."), MDFNST_INT, "0", "-2", "3" },
+  { "nes.sound_rate_error", MDFNSF_NOFLAGS, gettext_noop("Output rate tolerance."), gettext_noop("Lower values correspond to better matching of the output rate of the resampler to the actual desired output rate, at the expense of increased RAM usage and poorer CPU cache utilization.  DO NOT INCREASE THIS VALUE, OR SOUND WILL LIKELY BE OFF-KEY AND THE WRONG TEMPO, AMONG OTHER PROBLEMS."), MDFNST_FLOAT, "0.00004", "0.0000001", "0.01" },
   { "nes.n106bs", MDFNSF_NOFLAGS, gettext_noop("Enable less-accurate, but better sounding, Namco 106(mapper 19) sound emulation."), NULL, MDFNST_BOOL, "0" },
   { "nes.fnscan", MDFNSF_EMU_STATE, gettext_noop("Scan filename for (U),(J),(E),etc. strings to en/dis-able PAL emulation."), 
 	gettext_noop("Warning: This option may break NES network play when enabled IF the players are using ROM images with different filenames."), MDFNST_BOOL, "1" },
 
   { "nes.pal", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("Enable PAL(50Hz) NES emulation."), NULL, MDFNST_BOOL, "0" },
+#ifndef WII
+  // XXX WIIFIX?
   { "nes.gg", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("Enable Game Genie emulation."), NULL, MDFNST_BOOL, "0" },
+#endif
   { "nes.ggrom", MDFNSF_EMU_STATE, gettext_noop("Path to Game Genie ROM image."), NULL, MDFNST_STRING, "gg.rom" },
   { "nes.clipsides", MDFNSF_NOFLAGS, gettext_noop("Clip left+right 8 pixel columns."), NULL, MDFNST_BOOL, "0" },
   { "nes.slstart", MDFNSF_NOFLAGS, gettext_noop("First displayed scanline in NTSC mode."), NULL, MDFNST_UINT, "8", "0", "239" },
   { "nes.slend", MDFNSF_NOFLAGS, gettext_noop("Last displayed scanlines in NTSC mode."), NULL, MDFNST_UINT, "231", "0", "239" },
   { "nes.slstartp", MDFNSF_NOFLAGS, gettext_noop("First displayed scanline in PAL mode."), NULL, MDFNST_UINT, "0", "0", "239" },
   { "nes.slendp", MDFNSF_NOFLAGS, gettext_noop("Last displayedscanlines in PAL mode."), NULL, MDFNST_UINT, "239", "0", "239" },
+
+  { "nes.correct_aspect", MDFNSF_CAT_VIDEO, gettext_noop("Correct the aspect ratio."), NULL, MDFNST_BOOL, "0" },
   { "nes.ntscblitter", MDFNSF_NOFLAGS, gettext_noop("Enable NTSC color generation and blitter."), 
 	gettext_noop("NOTE: If your refresh rate isn't very close to 60.1Hz(+-0.1), you will need to set the nes.ntsc.mergefields setting to \"1\" to avoid excessive flickering."), MDFNST_BOOL, "0" },
 
@@ -494,12 +514,12 @@ static MDFNSetting NESSettings[] =
   { "nes.ntsc.matrix", MDFNSF_NOFLAGS, gettext_noop("Enable NTSC custom decoder matrix."), NULL, MDFNST_BOOL, "0" },
 
   /* Default custom decoder matrix(not plain default matrix) is from Sony */
-  { "nes.ntsc.matrix.0", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 0(red, value * V)."), NULL, MDFNST_FLOAT, "1.539", "-2", "2", NULL, NESPPU_SettingChanged },
-  { "nes.ntsc.matrix.1", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 1(red, value * U)."), NULL, MDFNST_FLOAT, "-0.622", "-2", "2", NULL, NESPPU_SettingChanged },
-  { "nes.ntsc.matrix.2", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 2(green, value * V)."), NULL, MDFNST_FLOAT, "-0.571", "-2", "2", NULL, NESPPU_SettingChanged },
-  { "nes.ntsc.matrix.3", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 3(green, value * U)."), NULL, MDFNST_FLOAT, "-0.185", "-2", "2", NULL, NESPPU_SettingChanged },
-  { "nes.ntsc.matrix.4", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 4(blue, value * V)."), NULL, MDFNST_FLOAT, "0.000", "-2", "2", NULL, NESPPU_SettingChanged },
-  { "nes.ntsc.matrix.5", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 5(blue, value * U."), NULL, MDFNST_FLOAT, "2.000", "-2", "2", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.0", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 0(red, value * V)."), NULL, MDFNST_FLOAT, "1.539", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.1", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 1(red, value * U)."), NULL, MDFNST_FLOAT, "-0.622", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.2", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 2(green, value * V)."), NULL, MDFNST_FLOAT, "-0.571", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.3", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 3(green, value * U)."), NULL, MDFNST_FLOAT, "-0.185", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.4", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 4(blue, value * V)."), NULL, MDFNST_FLOAT, "0.000", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
+  { "nes.ntsc.matrix.5", MDFNSF_NOFLAGS, gettext_noop("NTSC custom decoder matrix element 5(blue, value * U."), NULL, MDFNST_FLOAT, "2.000", "-2.000", "2.000", NULL, NESPPU_SettingChanged },
   { NULL }
 };
 
@@ -580,11 +600,14 @@ MDFNGI EmulatedNES =
  NULL,
  NULL,
  CloseGame,
- MDFNNES_ToggleLayer,
+ MDFNNES_SetLayerEnableMask,
  "Background\0Sprites\0",
+ NULL,
+ NULL,
  InstallReadPatch,
  RemoveReadPatches,
  MemRead,
+ false,
  StateAction,
  Emulate,
  MDFNNES_SetInput,
@@ -601,7 +624,7 @@ MDFNGI EmulatedNES =
  256,	// Nominal width
  240,	// Nominal height
  256,	// Framebuffer width(altered if NTSC blitter is enabled)
- 256,	// Framebuffer height
+ 240,	// Framebuffer height
 
  1,     // Number of output sound channels
 };

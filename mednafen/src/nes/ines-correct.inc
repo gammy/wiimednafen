@@ -1,3 +1,5 @@
+{0,  37, -1, 0xa4057e574307d204ULL },	/* Super Mario Bros + Tetris + Nintendo World Cup (Europe) */
+{0, 101, -1, 0x58d32b2e1ba753e1ULL },	/* Urusei Yatsura */
 {0x1b71ccdb, 4, 8},	/* Gauntlet 2 */
 {0xfebf5dc1, 0, 1},	/* Onyako Town(Bootleg) */
 
@@ -60,7 +62,7 @@
 	 {0xf518dd58,7,8},	/* Captain Skyhawk */
 	 {0x7ccb12a3,43,-1},	/* SMB2j */
 	 {0x6f12afc5,235,-1},	/* Golden Game 150-in-1 */
-	 {0xccc03440,156,-1},	
+	 {0xccc03440,156,-1},	/* Buzz & Waldog */
 	 {0xc9ee15a7,3,-1},	/* 3 is probably best.  41 WILL NOT WORK. */
 
 	 {0x3e1271d5,79,1},	/* Tiles of Fate */

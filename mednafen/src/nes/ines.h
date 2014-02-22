@@ -5,12 +5,19 @@ extern uint32 iNESGameCRC32;
 
 struct iNES_HEADER
 {
-	char ID[4]; /*NES^Z*/
-        uint8 ROM_size;
-        uint8 VROM_size;
-        uint8 ROM_type;
-        uint8 ROM_type2;
-        uint8 reserve[8];
+	union
+	{
+	 struct
+	 {
+	  char ID[4]; /*NES^Z*/
+          uint8 ROM_size;
+          uint8 VROM_size;
+          uint8 ROM_type;
+          uint8 ROM_type2;
+          uint8 reserve[8];
+	 };
+	 uint8 raw[16];
+	};
 };
 
 int Mapper1_Init(CartInfo *);
@@ -34,6 +41,7 @@ int Mapper26_Init(CartInfo *);
 int Mapper32_Init(CartInfo *);
 int Mapper33_Init(CartInfo *);
 int Mapper34_Init(CartInfo *);
+int Mapper37_Init(CartInfo *);
 int Mapper38_Init(CartInfo *);
 int Mapper41_Init(CartInfo *);
 int Mapper44_Init(CartInfo *);
@@ -69,6 +77,7 @@ int Mapper92_Init(CartInfo *);
 int Mapper90_Init(CartInfo *);
 int Mapper97_Init(CartInfo *);
 int Mapper99_Init(CartInfo *);
+int Mapper101_Init(CartInfo *);
 
 int Mapper165_Init(CartInfo *);
 int Mapper209_Init(CartInfo *);

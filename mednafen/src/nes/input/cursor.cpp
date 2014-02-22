@@ -40,15 +40,10 @@ static const uint8 MDFNcursor[11*19]=
 
 void MDFN_DrawGunSight(MDFN_Surface *surface, int xc, int yc)
 {
-#if NES_BPP==32
  uint32 *buf = surface->pixels;
-#elif NES_BPP==16
- uint16 *buf = surface->pixels16;
-#endif
-
  int x,y;
  int c,d;
- const int ctransform[2] = { surface->MakeColor(0xff, 0xff, 0xff), surface->MakeColor(0, 0, 0) };
+ const uint32 ctransform[2] = { surface->MakeColor(0xff, 0xff, 0xff), surface->MakeColor(0, 0, 0) };
  MDFN_Rect DisplayRect;
 
  NESPPU_GetDisplayRect(&DisplayRect);
@@ -76,15 +71,10 @@ void MDFN_DrawGunSight(MDFN_Surface *surface, int xc, int yc)
 
 void MDFN_DrawCursor(MDFN_Surface *surface, int xc, int yc)
 {
-#if NES_BPP==32
  uint32 *buf = surface->pixels;
-#elif NES_BPP==16
- uint16 *buf = surface->pixels16;
-#endif
-
  int x,y;
  int c,d;
- const int ctransform[4] = { surface->MakeColor(0, 0, 0), surface->MakeColor(0, 0, 0),
+ const uint32 ctransform[4] = { surface->MakeColor(0, 0, 0), surface->MakeColor(0, 0, 0),
 			     surface->MakeColor(0xff, 0xff, 0xff), surface->MakeColor(0, 0, 0)
 			   };
  MDFN_Rect DisplayRect;

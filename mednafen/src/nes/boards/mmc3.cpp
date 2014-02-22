@@ -730,7 +730,7 @@ int Mapper165_Init(CartInfo *info)
   return(0);
 
  cwrap=M165PPU;
- if(!(CHRRAM = (uint8*)MDFN_malloc(4096,"CHRRAM")))
+ if(!(CHRRAM = (uint8*)malloc(4096)))
  {
   GenMMC3Close();
   return(0);
@@ -1077,7 +1077,7 @@ int Mapper74_Init(CartInfo *info)
 
  info->Power = M74_Power;
 
- if(!(CHRRAM=(uint8*)MDFN_malloc(2048,"CHRRAM")))
+ if(!(CHRRAM=(uint8*)malloc(2048)))
  {
   GenMMC3Close();
   return(0);
@@ -1101,7 +1101,7 @@ int Mapper148_Init(CartInfo *info)
   return(0);
  cwrap=m148kie;
  pwrap=m74p;
- if(!(CHRRAM=(uint8*)MDFN_malloc(2048,"CHRRAM")))
+ if(!(CHRRAM=(uint8*)malloc(2048)))
  {
   GenMMC3Close();
   return(0);
@@ -1449,7 +1449,7 @@ static int GenMMC3_Init(CartInfo *info, int prg, int chr, int wram, int battery)
  if(wram)
  {
   mmc3opts|=1;
-  if(!(WRAM=(uint8*)MDFN_malloc(wram*1024,"WRAM")))
+  if(!(WRAM=(uint8*)malloc(wram*1024)))
   {
    GenMMC3Close();
    return(0);
@@ -1466,7 +1466,7 @@ static int GenMMC3_Init(CartInfo *info, int prg, int chr, int wram, int battery)
 
  if(!chr)
  {
-  if(!(CHRRAM=(uint8*)MDFN_malloc(8192,"CHRRAM")))
+  if(!(CHRRAM=(uint8*)malloc(8192)))
   {
    GenMMC3Close();
    return(0);
@@ -1558,7 +1558,7 @@ int Mapper119_Init(CartInfo *info)
  if(!(GenMMC3_Init(info, 512, 64, 0, 0)))
   return(0);
  cwrap=TQWRAP;
- if(!(CHRRAM=(uint8*)MDFN_malloc(8192,"CHRRAM")))
+ if(!(CHRRAM=(uint8*)malloc(8192)))
  {
   GenMMC3Close();
   return(0);
@@ -1625,13 +1625,74 @@ int TQROM_Init(CartInfo *info)
  if(!(GenMMC3_Init(info, 512, 64, 0, 0)))
   return(0);
  cwrap=TQWRAP;
- if(!(CHRRAM=(uint8*)MDFN_malloc(8192,"CHRRAM")))
+ if(!(CHRRAM=(uint8*)malloc(8192)))
  {
   GenMMC3Close();
   return(0);
  }
  CHRRAMSize=8192;
  SetupCartCHRMapping(0x10, CHRRAM, 8192, 1);
+
+ return(0);
+}
+
+static void M37PW(uint32 A, uint8 V)
+{
+ uint32 NV = V;
+ const unsigned Q = (EXPREGS[0] >> 2) & 1;
+ const unsigned B = EXPREGS[0] & 0x3;
+
+ NV &= (Q << 3) | 0x7;
+ NV |= Q << 4;
+ NV |= (B + 5) & 0x8;
+
+ setprg8(A, NV);
+}
+
+static void M37CW(uint32 A, uint8 V)
+{
+ uint32 NV = V;
+ const unsigned Q = (EXPREGS[0] >> 2) & 1;
+
+ NV &= 0x7F;
+ NV |= Q << 7;
+
+ setchr1(A, NV);
+}
+
+static DECLFW(M37Write)
+{
+ EXPREGS[0] = V & 0x7;
+ FixMMC3PRG(MMC3_cmd);
+ FixMMC3CHR(MMC3_cmd);
+}
+
+static void M37_Power(CartInfo *info)
+{
+ EXPREGS[0] = 0;
+ GenMMC3Power(info);
+}
+
+static void M37_Reset(CartInfo *info)
+{
+ EXPREGS[0] = 0;
+ FixMMC3PRG(MMC3_cmd);
+ FixMMC3CHR(MMC3_cmd);
+}
+
+int Mapper37_Init(CartInfo *info)
+{
+ if(!(GenMMC3_Init(info, 256, 256, 0, 0)))
+  return(0);
+
+ SetWriteHandler(0x6000, 0x7FFF, M37Write);
+ SetReadHandler(0x6000, 0x7FFF, 0);
+
+ pwrap = M37PW;
+ cwrap = M37CW;
+ info->Power = M37_Power;
+ info->Reset = M37_Reset;
+ EXPRCount = 1;
 
  return(0);
 }

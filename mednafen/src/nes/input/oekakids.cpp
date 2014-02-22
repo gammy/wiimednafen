@@ -74,8 +74,8 @@ static void OK_Write(uint8 V)
 static void OK_Update(void *data)
 {
  //puts("Sync");
- OKX = (uint32)MDFN_de32lsb((uint8 *)data + 0);
- OKY = (uint32)MDFN_de32lsb((uint8 *)data + 4);
+ OKX = (int32)MDFN_de32lsb((uint8 *)data + 0) >> 16;
+ OKY = (int32)MDFN_de32lsb((uint8 *)data + 4) >> 16;
  OKB=((uint8*)data)[8];
 
  NESPPU_TranslateMouseXY(OKX, OKY);
@@ -107,7 +107,7 @@ static int StateActionFC(StateMem *sm, int load, int data_only)
  return(ret);
 }
 
-static INPUTCFC OekaKids={OK_Read,OK_Write,0,OK_Update,0,DrawOeka, StateActionFC, 3, sizeof(uint32) };
+static INPUTCFC OekaKids={OK_Read,OK_Write,0,OK_Update,0,DrawOeka, StateActionFC };
 
 INPUTCFC *MDFN_InitOekaKids(void)
 {

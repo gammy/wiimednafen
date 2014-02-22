@@ -376,6 +376,7 @@ struct CHINF {
         uint32 crc32;
         int32 mapper;
         int32 mirror;
+	uint64 pmd5;
 };
 
 static void CheckHInfo(void)
@@ -449,14 +450,14 @@ static void CheckHInfo(void)
  for(x=0;x<8;x++)
  {
   partialmd5 |= (uint64)iNESCart.MD5[15-x] << (x*8);
-  //printf("%16llx\n",partialmd5);
+  //printf("%16llx\n", partialmd5);
  }
  CheckBad(partialmd5);
  x=0;
 
  do
  {
-  if(moo[x].crc32 == iNESGameCRC32)
+  if((moo[x].crc32 && moo[x].crc32 == iNESGameCRC32) || (moo[x].pmd5 && moo[x].pmd5 == partialmd5))
   {
    if(moo[x].mapper >= 0)
    {
@@ -573,7 +574,7 @@ bool iNESLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
 	 return(FALSE);
 
 	/* File size is too small to be an iNES file */
-        memcpy(&head, fp->data, 16);
+        memcpy(head.raw, fp->data, 16);
 	fp->fseek(16, SEEK_SET);
 
 	memset(&iNESCart,0,sizeof(iNESCart));
@@ -581,30 +582,30 @@ bool iNESLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
 	/* Do some fixes to common strings found in
 	   old iNES-format headers.
 	*/
-        if(!memcmp((char *)(&head)+0x7,"DiskDude",8))
+        if(!memcmp(&head.raw[0x7], "DiskDude", 8))
         {
-         memset((char *)(&head)+0x7,0,0x9);
+         memset(&head.raw[0x7], 0, 0x9);
         }
 
-        if(!memcmp((char *)(&head)+0x7,"demiforce",9))
+        if(!memcmp(&head.raw[0x7], "demiforce", 9))
         {
-         memset((char *)(&head)+0x7,0,0x9);
+         memset(&head.raw[0x7], 0, 0x9);
         }
 
-        if(!memcmp((char *)(&head)+0xA,"Ni03",4))
+        if(!memcmp(&head.raw[0xA], "Ni03", 4))
         {
-         if(!memcmp((char *)(&head)+0x7,"Dis",3))
-          memset((char *)(&head)+0x7,0,0x9);
+         if(!memcmp(&head.raw[0x7], "Dis", 3))
+          memset(&head.raw[0x7], 0, 0x9);
          else
-          memset((char *)(&head)+0xA,0,0x6);
+          memset(&head.raw[0xA], 0, 0x6);
         }
 
         if(!head.ROM_size)
 	{
 	 MDFN_PrintError(_("No PRG ROM present!"));
 	 return(0);
-
 	}
+
         ROM_size = head.ROM_size;
         VROM_size = head.VROM_size;
 	ROM_size = round_up_pow2(ROM_size);
@@ -731,7 +732,11 @@ bool iNESLoad(const char *name, MDFNFILE *fp, NESGameType *gt)
 	 return(0);
 	}
 
-	MDFN_LoadGameSave(&iNESCart);
+	if(!MDFN_LoadGameSave(&iNESCart))
+	{
+	 iNESFree();
+	 return(0);
+	}
 
 	gt->Power = iNES_Power;
 	gt->Reset = iNES_Reset;
@@ -788,6 +793,7 @@ static const BMAPPING bmap[] = {
 	{ 32, Mapper32_Init, 0},
 	{ 33, Mapper33_Init, 0},
 	{ 34, Mapper34_Init, 0},
+	{ 37, Mapper37_Init, 0},
 	{ 38, Mapper38_Init, 0},
         { 41, Mapper41_Init, 0},
 	{ 42, BioMiracleA_Init, 0},
@@ -830,6 +836,7 @@ static const BMAPPING bmap[] = {
 	{ 96, Mapper96_Init, 0},
 	{ 97, Mapper97_Init, 0},
 	{ 99, Mapper99_Init, 0},
+	{ 101, Mapper101_Init, 0},
 	{ 105, Mapper105_Init, 0},
 	{ 107, Mapper107_Init, 0},
 	{ 112, Mapper112_Init, 0},

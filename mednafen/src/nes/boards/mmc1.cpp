@@ -498,7 +498,7 @@ static int GenMMC1Init(CartInfo *info, int prg, int chr, int wram, int battery)
  WRAM_Size = wram * 1024;
  if(wram) 
  { 
-  if(!(WRAM=(uint8*)MDFN_malloc(wram*1024,"WRAM")))
+  if(!(WRAM=(uint8*)malloc(wram*1024)))
   {
    GenMMC1Close();
    return(0);
@@ -517,7 +517,7 @@ static int GenMMC1Init(CartInfo *info, int prg, int chr, int wram, int battery)
  }
  if(!chr)
  {
-  if(!(CHRRAM=(uint8*)MDFN_malloc(8192,"CHRRAM")))
+  if(!(CHRRAM=(uint8*)malloc(8192)))
   {
    GenMMC1Close();
    return(0);

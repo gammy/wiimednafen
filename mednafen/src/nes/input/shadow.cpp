@@ -68,6 +68,7 @@ static void ZapperFrapper(uint8 *bg, uint8 *spr, uint32  linets, int final)
 #else
      if(sum>=220*3)
 #endif
+
      {
       ZD.zaphit=timestampbase + timestamp;
       goto endo;
@@ -126,8 +127,8 @@ static void UpdateZapper(void *data)
   if(ptr[8]&7 && (!(ZD.mzb&7)))
    ZD.bogo=5;
 
-  ZD.mzx=(uint32)MDFN_de32lsb(ptr + 0);
-  ZD.mzy=(uint32)MDFN_de32lsb(ptr + 4);
+  ZD.mzx = (int32)MDFN_de32lsb(ptr + 0) >> 16;
+  ZD.mzy = (int32)MDFN_de32lsb(ptr + 4) >> 16;
   ZD.mzb=ptr[8];
 
   NESPPU_TranslateMouseXY(ZD.mzx, ZD.mzy);
@@ -157,7 +158,7 @@ static int StateActionFC(StateMem *sm, int load, int data_only)
  return(ret);
 }
 
-static INPUTCFC SHADOWC={ReadZapper,0,StrobeShadow,UpdateZapper,ZapperFrapper, DrawZapper, StateActionFC, 3, sizeof(uint32) };
+static INPUTCFC SHADOWC={ReadZapper,0,StrobeShadow,UpdateZapper,ZapperFrapper, DrawZapper, StateActionFC };
 
 INPUTCFC *MDFN_InitSpaceShadow(void)
 {

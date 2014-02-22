@@ -98,6 +98,48 @@ int CNROM_Init(CartInfo *info)
  return(1);
 }
 
+
+static int Mapper101_StateAction(StateMem *sm, int load, int data_only)
+{
+ SFORMAT StateRegs[] =
+ {
+  SFVAR(latche),
+  SFEND
+ };
+ int ret = MDFNSS_StateAction(sm, load, data_only, StateRegs, "MAPR");
+ if(load)
+  setchr8(latche);
+ return(ret);
+}
+
+static DECLFW(Mapper101Write)
+{
+ latche = ((V & 1) << 1) | ((V & 2) >> 1);
+ setchr8(latche);
+}
+
+static void Mapper101Reset(CartInfo *info)
+{
+ latche = 0;
+ setprg16(0x8000,0);
+ setprg16(0xC000,1);
+ setchr8(0);
+}
+
+int Mapper101_Init(CartInfo *info)
+{
+ info->Power=Mapper101Reset;
+ info->StateAction = Mapper101_StateAction;
+
+ SetReadHandler(0x8000,0xFFFF,CartBR);
+ SetWriteHandler(0x6000,0x7fff,Mapper101Write);
+
+ return(1);
+}
+
+
+
+
 static void NROM128Reset(CartInfo *info)
 {
   setprg16(0x8000,0);

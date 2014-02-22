@@ -57,15 +57,15 @@ static void ZapperFrapper(int w, uint8 *bg, uint8 *spr, uint32 linets, int final
      if(sum>=100*3)
      {
       ZD[w].zaphit = timestampbase + timestamp;
-//	printf("Hit: %d %d %ld\n", scanline, timestamp, timestampbase + timestamp);
+//      printf("Hit: %d %d %ld\n", scanline, timestamp, timestampbase + timestamp);
       goto endo;
      }
-    }   
+    }
    xs++;
   }
  }
  endo:;
-}      
+}
 
 static int CheckColor(int w)
 {
@@ -112,8 +112,8 @@ static void DrawZapper(int w, MDFN_Surface *surface)
 static void UpdateZapper(int w, void *data)
 {
  uint8 *data_8 = (uint8 *)data;
- uint32 new_x = (uint32)MDFN_de32lsb(data_8 + 0);//50;
- uint32 new_y = (uint32)MDFN_de32lsb(data_8 + 4);//50;
+ uint32 new_x = (int32)MDFN_de32lsb(data_8 + 0) >> 16;
+ uint32 new_y = (int32)MDFN_de32lsb(data_8 + 4) >> 16;
  uint8 new_b = *(uint8 *)(data_8 + 8);
 
  NESPPU_TranslateMouseXY(new_x, new_y);
@@ -151,8 +151,8 @@ static int StateAction(int w, StateMem *sm, int load, int data_only)
  return(ret);
 }
 
-static INPUTC ZAPC={ReadZapper,0,0,UpdateZapper,ZapperFrapper,DrawZapper, StateAction, 3, sizeof(uint32) };
-static INPUTC ZAPVSC={ReadZapperVS,0,StrobeZapperVS,UpdateZapper,ZapperFrapper,DrawZapper, StateAction, 3, sizeof(uint32) };
+static INPUTC ZAPC={ReadZapper,0,0,UpdateZapper,ZapperFrapper,DrawZapper, StateAction };
+static INPUTC ZAPVSC={ReadZapperVS,0,StrobeZapperVS,UpdateZapper,ZapperFrapper,DrawZapper, StateAction };
 
 INPUTC *MDFN_InitZapper(int w)
 {

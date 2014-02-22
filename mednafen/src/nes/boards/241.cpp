@@ -86,7 +86,7 @@ static void Close(void)
 {
  if(WRAM)
  {
-  MDFN_free(WRAM);
+  free(WRAM);
   WRAM = NULL;
  }
 }
@@ -97,7 +97,7 @@ int Mapper241_Init(CartInfo *info)
  info->StateAction = StateAction;
  info->Close = Close;
 
- if(!(WRAM = (uint8 *)MDFN_malloc(8192,"WRAM")))
+ if(!(WRAM = (uint8 *)malloc(8192)))
  {
   return(0);
  }

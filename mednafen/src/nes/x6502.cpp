@@ -444,14 +444,14 @@ static void X6502_RunDebug(int32 cycles)
          cycles*=15;          // 15*4=60
         else
          cycles*=16;          // 16*4=64
- 
+
         _count+=cycles;
- 
+
 	PenguinPower:
         while(_count>0)
         {
 	 const uint16 old_PC = _PC;
-         int32 temp;   
+         int32 temp;
          uint8 b1;
 
          if(_IRQlow && !X.cpoint) // Don't run IRQ stuff if we weren't here in a save state

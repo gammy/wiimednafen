@@ -1,13 +1,14 @@
-int DTestButton(std::vector<ButtConfig> &bc, const char *KeyState, const uint32* MouseData);
-int DTestButton(ButtConfig &bc, const char *KeyState, const uint32 *MouseData);
+#ifndef __MDFN_DRIVERS_INPUT_CONFIG_H
+#define __MDFN_DRIVERS_INPUT_CONFIG_H
 
-int DTestButtonCombo(std::vector<ButtConfig> &bc, const char *KeyState);
-int DTestButtonCombo(ButtConfig &bc, const char *KeyState);
+int DTestButton(std::vector<ButtConfig> &bc, const char *KeyState, const uint32* MouseData, bool analog = false);
+int DTestButton(ButtConfig &bc, const char *KeyState, const uint32 *MouseData, bool analog = false);
 
-int ButtonConfigBegin(void);
-void ButtonConfigEnd(void);
+int DTestButtonCombo(std::vector<ButtConfig> &bc, const char *KeyState, const uint32 *MouseData, bool AND_Mode = false);
+int DTestButtonCombo(ButtConfig &bc, const char *KeyState, const uint32 *MouseData, bool AND_Mode = false);
 
 int DTryButtonBegin(ButtConfig *bc, int commandkey);
 int DTryButton(void);
 int DTryButtonEnd(ButtConfig *bc);
 
+#endif

@@ -20,13 +20,7 @@ void wsMakeTiles(void);
 void wsGetTile(uint32,uint32,int,int,int);
 void wsSetVideo(int, bool);
 
-#if WSWAN_BPP == 8
-void wsScanline(uint8 *target);
-#elif WSWAN_BPP == 16     
-void wsScanline(uint16 *target);
-#else
 void wsScanline(uint32 *target);
-#endif
 
 extern uint32		dx_r,dx_g,dx_b,dx_sr,dx_sg,dx_sb;
 extern uint32		dx_bits,dx_pitch,cmov,dx_linewidth_blit,dx_buffer_line;
@@ -42,7 +36,7 @@ void WSwan_GfxWSCPaletteRAMWrite(uint32 ws_offset, uint8 data);
 
 bool wsExecuteLine(MDFN_Surface *surface, bool skip);
 
-bool WSwan_GfxToggleLayer(int which);
+void WSwan_SetLayerEnableMask(uint64 mask);
 int WSwan_GfxStateAction(StateMem *sm, int load, int data_only);
 
 #ifdef WANT_DEBUGGER
