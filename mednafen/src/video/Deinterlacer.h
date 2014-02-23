@@ -12,9 +12,12 @@ class Deinterlacer
 
  void Process(MDFN_Surface *surface, const MDFN_Rect &DisplayRect, MDFN_Rect *LineWidths, const bool field);
 
- void ClearState();
+ void ClearState(void);
 
  private:
+
+ template<typename T>
+ void InternalProcess(MDFN_Surface *surface, const MDFN_Rect &DisplayRect, MDFN_Rect *LineWidths, const bool field);
 
  MDFN_Surface *FieldBuffer;
  std::vector<int32> LWBuffer;
