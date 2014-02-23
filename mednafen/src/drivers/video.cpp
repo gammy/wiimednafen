@@ -21,19 +21,24 @@
 #include <trio/trio.h>
 
 #include "video.h"
+#ifndef WII
 #include "opengl.h"
 #include "shader.h"
-#include "nongl.h"
+#else
 #include "overlay.h"
+#include "nongl.h"
+#endif
 
 #include "icon.h"
+#ifndef WII
 #include "netplay.h"
-#include "cheat.h"
+#endif
 
+#include "cheat.h"
+#include "help.h"
+#include "fps.h"
 #include "nnx.h"
 #include "debugger.h"
-#include "fps.h"
-#include "help.h"
 #include "video-state.h"
 #include "../video/selblur.h"
 
@@ -41,6 +46,11 @@
 #include "scalebit.h"
 #include "hqxx-common.h"
 #include "2xSaI.h"
+#endif
+
+#ifdef WII_NETTRACE
+#include <network.h>
+#include "net_print.h"  
 #endif
 
 typedef struct
@@ -53,7 +63,9 @@ typedef struct
         int stretch;
         int special;
         int scanlines;
+#ifndef WII
 	ShaderType pixshader;
+#endif
 } CommonVS;
 
 static CommonVS _video;
@@ -105,7 +117,9 @@ static int cur_xres, cur_yres, cur_flags;
 static ScalerDefinition *CurrentScaler = NULL;
 
 static SDL_Surface *screen = NULL;
+#ifndef WII
 static OpenGL_Blitter *ogl_blitter = NULL;
+#endif
 static SDL_Surface *IconSurface=NULL;
 
 static MDFN_Rect screen_dest_rect;
@@ -144,12 +158,14 @@ static void MarkNeedBBClear(void)
 static void ClearBackBuffer(void)
 {
  //printf("WOO: %u\n", MDFND_GetTime());
+#ifndef WII
  if(ogl_blitter)
  {
   ogl_blitter->ClearBackBuffer();
  }
  else
  {
+#endif
   // Don't use SDL_FillRect() on hardware surfaces, it's borked(causes a long wait) with DirectX.
   // ...on second thought, memset() is likely borked on PPC with hardware surface memory due to use of "dcbz" on uncachable memory. :(
   //
@@ -168,7 +184,9 @@ static void ClearBackBuffer(void)
   {
    SDL_FillRect(screen, NULL, 0);
   }
+#ifndef WII
  }
+#endif
 }
 
 /* Return 1 if video was killed, 0 otherwise(video wasn't initialized). */
@@ -210,11 +228,13 @@ void KillVideo(void)
   NetSurface = NULL;
  }
 
+#ifndef WII
  if(ogl_blitter)
  {
   delete ogl_blitter;
   ogl_blitter = NULL;
  }
+#endif
 
  if(vdriver == VDRIVER_OVERLAY)
   OV_Kill();
@@ -435,7 +455,9 @@ int InitVideo(MDFNGI *gi)
 
  _video.special = GetSpecialScalerID(special_string);
 
+#ifndef WII
  _video.pixshader = (ShaderType)MDFN_GetSettingI(std::string(sn + "." + std::string("pixshader")).c_str());
+#endif
 
  CurrentScaler = _video.special ? &Scalers[_video.special - 1] : NULL;
 
@@ -615,6 +637,7 @@ int InitVideo(MDFNGI *gi)
 
  int rs, gs, bs, as;
 
+#ifndef WII
  if(cur_flags & SDL_OPENGL)
  {
   try
@@ -631,6 +654,7 @@ int InitVideo(MDFNGI *gi)
  }
  else
  {
+#endif
   rs = screen->format->Rshift;
   gs = screen->format->Gshift;
   bs = screen->format->Bshift;
@@ -638,7 +662,9 @@ int InitVideo(MDFNGI *gi)
   as = 0;
   while(as == rs || as == gs || as == bs) // Find unused 8-bits to use as our alpha channel
    as += 8;
+#ifndef WII
  }
+#endif
 
  //printf("%d %d %d %d\n", rs, gs, bs, as);
 
@@ -768,15 +794,19 @@ void VideoShowMessage(UTF8 *text)
 
 void BlitRaw(MDFN_Surface *src, const MDFN_Rect *src_rect, const MDFN_Rect *dest_rect, int source_alpha)
 {
+#ifndef WII
  if(ogl_blitter)
   ogl_blitter->BlitRaw(src, src_rect, dest_rect, (source_alpha != 0) && osd_alpha_blend);
  else
  {
+#endif
   SDL_to_MDFN_Surface_Wrapper m_surface(screen);
 
   //MDFN_SrcAlphaBlitSurface(src, src_rect, &m_surface, dest_rect);
   MDFN_StretchBlitSurface(src, src_rect, &m_surface, dest_rect, (source_alpha > 0) && osd_alpha_blend);
+#ifndef WII
  }
+#endif
 
  bool cond1 = (dest_rect->x < screen_dest_rect.x || (dest_rect->x + dest_rect->w) > (screen_dest_rect.x + screen_dest_rect.w));
  bool cond2 = (dest_rect->y < screen_dest_rect.y || (dest_rect->y + dest_rect->h) > (screen_dest_rect.y + screen_dest_rect.h));
@@ -829,6 +859,8 @@ static bool OverlayOK;	// Set to TRUE when vdriver == "overlay", and it's safe t
 
 static void SubBlit(MDFN_Surface *source_surface, const MDFN_Rect &src_rect, const MDFN_Rect &dest_rect)
 {
+
+#if 0
  MDFN_Surface *eff_source_surface = source_surface;
  MDFN_Rect eff_src_rect = src_rect;
  MDFN_Surface *tmp_blur_surface = NULL;
@@ -1019,10 +1051,12 @@ static void SubBlit(MDFN_Surface *source_surface, const MDFN_Rect &src_rect, con
     }
 #endif
 
+#ifndef WII
     if(ogl_blitter)
      ogl_blitter->Blit(bah_surface, &boohoo_rect, &dest_rect, &eff_src_rect, evideoip, CurGame->rotated);
     else
     {
+#endif
      if(OverlayOK)
      {
       SDL_Rect tr;
@@ -1040,15 +1074,19 @@ static void SubBlit(MDFN_Surface *source_surface, const MDFN_Rect &src_rect, con
 
       MDFN_StretchBlitSurface(bah_surface, &boohoo_rect, &m_surface, &dest_rect, false, _video.scanlines, &eff_src_rect, CurGame->rotated);
      }
+#ifndef WII
     }
+#endif
     delete bah_surface;
    }
    else // No special scaler:
    {
+#ifndef WII
     if(ogl_blitter)
      ogl_blitter->Blit(eff_source_surface, &eff_src_rect, &dest_rect, &eff_src_rect, evideoip, CurGame->rotated);
     else
     {
+#endif
      if(OverlayOK)
      {
       SDL_Rect tr;
@@ -1066,7 +1104,9 @@ static void SubBlit(MDFN_Surface *source_surface, const MDFN_Rect &src_rect, con
 
       MDFN_StretchBlitSurface(eff_source_surface, &eff_src_rect, &m_surface, &dest_rect, false, _video.scanlines, &eff_src_rect, CurGame->rotated);
      }
+#ifndef WII
     }
+#endif
    }
 
  if(tmp_blur_surface)
@@ -1074,6 +1114,7 @@ static void SubBlit(MDFN_Surface *source_surface, const MDFN_Rect &src_rect, con
   delete tmp_blur_surface;
   tmp_blur_surface = NULL;
  }
+#endif
 }
 
 void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN_Rect *LineWidths, const bool take_ssnapshot)
@@ -1099,8 +1140,13 @@ void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN
  OverlayOK = false;
  if(vdriver == VDRIVER_OVERLAY)
  {
+#ifndef WII
   bool osd_active = Help_IsActive() || SaveStatesActive() || IsConsoleCheatConfigActive() || Netplay_GetTextView() ||
 		   IsInternalMessageActive() || Debugger_IsActive(NULL, NULL);
+#else
+  bool osd_active = Help_IsActive() || SaveStatesActive() || IsConsoleCheatConfigActive() ||
+		   IsInternalMessageActive() || Debugger_IsActive(NULL, NULL);
+#endif
 
   OverlayOK = (vdriver == VDRIVER_OVERLAY) && !take_ssnapshot && !osd_active && (!CurrentScaler || (CurrentScaler->id != NTVB_HQ2X && CurrentScaler->id != NTVB_HQ3X &&
 		CurrentScaler->id != NTVB_HQ4X));
@@ -1227,10 +1273,12 @@ void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN
 
    ib = new MDFN_Surface(NULL, sr.w, sr.h, sr.w, MDFN_PixelFormat(MDFN_COLORSPACE_RGB, real_rs, real_gs, real_bs, real_as));
 
+#ifndef WII
    if(ogl_blitter)
     ogl_blitter->ReadPixels(ib, &sr);
    else
    {
+#endif
     if(SDL_MUSTLOCK(screen))
      SDL_LockSurface(screen);
 
@@ -1244,7 +1292,9 @@ void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN
 
     if(SDL_MUSTLOCK(screen))
      SDL_UnlockSurface(screen);
+#ifndef WII
    }
+#endif
 
 
    tr.x = tr.y = 0;
@@ -1379,6 +1429,7 @@ void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN
   CheatSurface = NULL;
  }
 
+#ifndef WII
  if(Netplay_GetTextView())
  {
   DrawNetplayTextBuffer(NetSurface, &NetRect);
@@ -1394,6 +1445,7 @@ void BlitScreen(MDFN_Surface *msurface, const MDFN_Rect *DisplayRect, const MDFN
    BlitRaw(NetSurface, &NetRect, &zederect);
   }
  }
+#endif
 
  BlitInternalMessage();
 

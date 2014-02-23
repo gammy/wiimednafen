@@ -47,19 +47,19 @@
 #include "video.h"
 #include "sound.h"
 #include "ers.h"
+#include "cheat.h"
+#include "help.h"   // FIXME WIIFIX Should this be here?
+#include "video-state.h"
+#include "remote.h"
 
 #ifndef WII
 #include <strings.h>
 #include "../qtrecord.h"
-#include "remote.h"
 #include "debugger.h"
 #include "memdebugger.h"
 #include "netplay.h"
-#include "cheat.h"
 #include "opengl.h"
-#include "video-state.h"
 #include "shader.h" // FIXME WIIFIX Should this be here?
-#include "help.h"   // FIXME WIIFIX Should this be here?
 #else
 #include "wii_app.h"
 #include "wii_sdl.h"
@@ -353,8 +353,13 @@ void MakeVideoSettings(std::vector <MDFNSetting> &settings)
   const char *sysname;
   char default_value[256];
   MDFNSetting setting;
+#ifndef WII
   const int default_xres = 0, default_yres = 0;
   const double default_scalefs = 1.0;
+#else
+  int default_xres = 0, default_yres = 0;
+  double default_scalefs = 1.0;
+#endif
   double default_scale;
 
   if(i == MDFNSystems.size())
@@ -519,6 +524,7 @@ void MDFND_Message(const char *s)
 
   if(StdoutMutex)
    SDL_mutexV(StdoutMutex);
+ }
 #else
 #ifdef WII_NETTRACE
  if(s)
@@ -527,7 +533,6 @@ void MDFND_Message(const char *s)
  }
 #endif
 #endif
- }
 }
 
 // CreateDirs should make sure errno is intact after calling mkdir() if it fails.
@@ -987,7 +992,9 @@ int CloseGame(void)
 	if(MDFN_GetSettingB("autosave"))
 	 MDFNI_SaveState(NULL, "mcq", NULL, NULL, NULL);
 
+#ifndef WII
 	MDFND_NetworkClose();
+#endif
 
 	MDFNI_CloseGame();
 
@@ -1002,9 +1009,9 @@ int CloseGame(void)
 }
 
 static void GameThread_HandleEvents(void);
-#ifndef WII
+//#ifndef WII
 static int volatile NeedExitNow = 0;
-#endif
+//#endif
 double CurGameSpeed = 1;
 
 void MainRequestExit(void)
@@ -1379,10 +1386,14 @@ void SendCEvent_to_GT(unsigned int code, void *data1, void *data2)
  evt.user.data1 = data1;
  evt.user.data2 = data2;
 
+#ifndef WII
  SDL_mutexP(EVMutex);
+#endif
  memcpy((void *)&gtevents[gte_write], &evt, sizeof(SDL_Event));
  gte_write = (gte_write + 1) & (gtevents_size - 1);
+#ifndef WII
  SDL_mutexV(EVMutex);
+#endif
 }
 
 void SDL_MDFN_ShowCursor(int toggle)
@@ -1445,11 +1456,15 @@ void PumpWrap(void)
  SDL_Event gtevents_temp[gtevents_size];
  int numevents = 0;
 
+#ifndef WII
  bool NITI;
 
  NITI = Netplay_IsTextInput();
 
  if(Debugger_IsActive() || NITI || IsConsoleCheatConfigActive() || Help_IsActive())
+#else
+ if(IsConsoleCheatConfigActive() || Help_IsActive())
+#endif
  {
   if(!krepeat)
    SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
@@ -1469,13 +1484,17 @@ void PumpWrap(void)
 
  while(SDL_PollEvent(&event))
  {
+#ifndef WII
   if(Debugger_IsActive())
    Debugger_Event(&event);
   else 
+#endif
    if(IsConsoleCheatConfigActive())
     CheatEventHook(&event);
 
+#ifndef WII
   NetplayEventHook(&event);
+#endif
 
   /* Handle the event, and THEN hand it over to the GUI. Order is important due to global variable mayhem(CEVT_TOGGLEFS. */
   switch(event.type)
@@ -1505,12 +1524,14 @@ void PumpWrap(void)
 		 case CEVT_SET_STATE_STATUS: MT_SetStateStatus((StateStatusStruct *)event.user.data1); break;
                  case CEVT_SET_MOVIE_STATUS: MT_SetMovieStatus((StateStatusStruct *)event.user.data1); break;
 		 case CEVT_WANT_EXIT:
+#ifndef WII
 		     if(!Netplay_TryTextExit())
 		     {
 		      SDL_Event evt;
 		      evt.quit.type = SDL_QUIT;
 		      SDL_PushEvent(&evt);
 		     }
+#endif
 		     break;
 	         case CEVT_SET_GRAB_INPUT:
                          SDL_WM_GrabInput(*(int *)event.user.data1 ? SDL_GRAB_ON : SDL_GRAB_OFF);
@@ -1539,13 +1560,17 @@ void PumpWrap(void)
   }
  }
 
+#ifndef WII
  SDL_mutexP(EVMutex);
+#endif
  for(int i = 0; i < numevents; i++)
  {
   memcpy((void *)&gtevents[gte_write], &gtevents_temp[i], sizeof(SDL_Event));
   gte_write = (gte_write + 1) & (gtevents_size - 1);
  }
+#ifndef WII
  SDL_mutexV(EVMutex);
+#endif
 
  if(!CurGame)
   GameThread_HandleEvents();
@@ -1787,6 +1812,7 @@ int main(int argc, char *argv[])
 	}
 	SDL_JoystickEventState(SDL_IGNORE);
 
+#ifndef WII
 	if(!(StdoutMutex = SDL_CreateMutex()))
 	{
 	 MDFN_PrintError(_("Could not create mutex: %s\n"), SDL_GetError());
@@ -1795,6 +1821,7 @@ int main(int argc, char *argv[])
 	}
 
         MainThreadID = SDL_ThreadID();
+#endif
 
         // Look for external emulation modules here.
 
@@ -1870,6 +1897,7 @@ int main(int argc, char *argv[])
 
 	//InitVideo(NULL);
 
+#ifndef WII
 	VTMutex = SDL_CreateMutex();
         EVMutex = SDL_CreateMutex();
 	GameMutex = SDL_CreateMutex();
@@ -1877,6 +1905,7 @@ int main(int argc, char *argv[])
 	VTReady = NULL;
 	VTDRReady = NULL;
 	VTLWReady = NULL;
+#endif
 
 	NeedVideoChange = -1;
 
@@ -1937,7 +1966,9 @@ int main(int argc, char *argv[])
 	 if(RemoteOn)
 	  CheckForSTDIOMessages();
 
+#ifndef WII
 	 SDL_mutexP(VTMutex);	/* Lock mutex */
+#endif
 
          if(NeedVideoChange)
          {
@@ -1985,14 +2016,18 @@ int main(int argc, char *argv[])
 	 if(DidVideoChange)	// Do it after PumpWrap() in case there are stale SDL_ActiveEvent in the SDL event queue.
 	  SendCEvent_to_GT(CEVT_SET_INPUT_FOCUS, (char*)0 + (bool)(SDL_GetAppState() & SDL_APPINPUTFOCUS), NULL);
 
+#ifndef WII
          SDL_mutexV(VTMutex);   /* Unlock mutex */
+#endif
          SDL_Delay(1);
 	}
 
 	CloseGame();
 
+#ifndef WII
 	SDL_DestroyMutex(VTMutex);
         SDL_DestroyMutex(EVMutex);
+#endif
 
 	for(int x = 0; x < 2; x++)
 	{
@@ -2188,7 +2223,7 @@ void MDFND_DispMessage(UTF8 *text)
 	 net_print_string( NULL, 0, "%s", text );
 #endif
 
- if( text) free(text); FIXME WIIFIX Out of date?
+ if( text) free(text); //FIXME WIIFIX Out of date?
 #endif
 }
 
