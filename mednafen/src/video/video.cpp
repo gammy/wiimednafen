@@ -25,10 +25,15 @@
 
 #include <trio/trio.h>
 
+#ifndef WII
 #include "png.h"
+#else
+#include "../FileWrapper.h"
+#endif
 
 void MDFNI_SaveSnapshot(const MDFN_Surface *src, const MDFN_Rect *rect, const MDFN_Rect *LineWidths)
 {
+#ifndef WII
  FileWrapper *pp = NULL;
 
  try
@@ -79,6 +84,7 @@ void MDFNI_SaveSnapshot(const MDFN_Surface *src, const MDFN_Rect *rect, const MD
   MDFN_PrintError(_("Error saving screen snapshot: %s"), e.what());
   MDFN_DispMessage(_("Error saving screen snapshot: %s"), e.what());
  }
+#endif
 }
 
 void MDFN_DispMessage(const char *format, ...) throw()
