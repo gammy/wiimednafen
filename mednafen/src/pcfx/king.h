@@ -1,7 +1,7 @@
 #ifndef __PCFX_KING_H
 #define __PCFX_KING_H
 
-void KING_StartFrame(VDC **, MDFN_Surface *surface, MDFN_Rect *DisplayRect, MDFN_Rect *LineWidths, int skip);
+void KING_StartFrame(VDC **, EmulateSpecStruct *espec);	//MDFN_Surface *surface, MDFN_Rect *DisplayRect, MDFN_Rect *LineWidths, int skip);
 void KING_SetPixelFormat(const MDFN_PixelFormat &format); //int rshift, int gshift, int bshift);
 uint16 FXVCE_Read16(uint32 A);
 void FXVCE_Write16(uint32 A, uint16 V);
@@ -26,7 +26,7 @@ uint8 KING_MemPeek(uint32 A);
 
 uint8 KING_RB_Fetch();
 
-bool KING_ToggleLayer(int which);
+void KING_SetLayerEnableMask(uint64 mask);
 
 int KING_StateAction(StateMem *sm, int load, int data_only);
 

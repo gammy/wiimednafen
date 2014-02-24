@@ -40,6 +40,10 @@
   This is a hack to somewhat address the issue, but to really fix it, we need to handle write buffer emulation in the V810 emulation core itself.
 */
 
+static std::vector<CDIF*> *cdifs = NULL;
+static bool CD_TrayOpen;
+static int CD_SelectedDisc;	// -1 for no disc
+
 V810 PCFX_V810;
 
 int64 pcfx_timestamp_base;
@@ -190,7 +194,7 @@ typedef struct
 {
  int8 tracknum;
  int8 format;
- int32 lba;
+ uint32 lba;
 } CDGameEntryTrack;
 
 typedef struct
@@ -231,7 +235,7 @@ static void Emulate(EmulateSpecStruct *espec)
   SoundBox_SetSoundRate(espec->SoundRate);
 
 
- KING_StartFrame(fx_vdc_chips, espec->surface, &espec->DisplayRect, espec->LineWidths, espec->skip);
+ KING_StartFrame(fx_vdc_chips, espec);	//espec->surface, &espec->DisplayRect, espec->LineWidths, espec->skip);
 
  v810_timestamp = PCFX_V810.Run(pcfx_event_handler);
 
@@ -273,7 +277,11 @@ static void PCFX_Reset(void)
  memset(RAM, 0x00, 2048 * 1024);
 
  for(int i = 0; i < 2; i++)
-  fx_vdc_chips[i]->Reset();
+ {
+  int32 dummy_ne MDFN_NOWARN_UNUSED;
+
+  dummy_ne = fx_vdc_chips[i]->Reset();
+ }
 
  KING_Reset();	// SCSICD_Power() is called from KING_Reset()
  SoundBox_Reset();
@@ -298,7 +306,7 @@ static void PCFX_Power(void)
 #ifdef WANT_DEBUGGER
 
 static uint8 GAS_SectorCache[2048];
-static int32 GAS_SectorCacheWhich = -1;
+static int32 GAS_SectorCacheWhich = -1;	// disc num is |'d in after << 24
 
 static void PCFXDBG_GetAddressSpaceBytes(const char *name, uint32 Address, uint32 Length, uint8 *Buffer)
 {
@@ -356,18 +364,21 @@ static void PCFXDBG_GetAddressSpaceBytes(const char *name, uint32 Address, uint3
  }
  else if(!strncmp(name, "track", strlen("track")))
  {
-  int track = atoi(name + strlen("track"));
-  int32 sector_base = CDIF_GetTrackStartPositionLBA(track);
+  int disc = 0, track = 0, sector_base = 0;
+  
+  trio_sscanf(name, "track%d-%d-%d", &disc, &track, &sector_base);
 
   while(Length--)
   {
    int32 sector = (Address / 2048) + sector_base;
    int32 sector_offset = Address % 2048;
 
-   if(sector != GAS_SectorCacheWhich)
+   if((sector | (disc << 24)) != GAS_SectorCacheWhich)
    {
-    CDIF_ReadSector(GAS_SectorCache, sector, 1);
-    GAS_SectorCacheWhich = sector;
+    if(!(*cdifs)[disc]->ReadSector(GAS_SectorCache, sector, 1))
+     memset(GAS_SectorCache, 0, 2048);
+
+    GAS_SectorCacheWhich = sector | (disc << 24);
    }
 
    *Buffer = GAS_SectorCache[sector_offset];
@@ -464,7 +475,7 @@ static void VDCB_IRQHook(bool asserted)
 
 static void SetRegGroups(void);
 
-static bool LoadCommon(void)
+static bool LoadCommon(std::vector<CDIF *> *CDInterfaces)
 {
  std::string biospath = MDFN_MakeFName(MDFNMKF_FIRMWARE, 0, MDFN_GetSettingS("pcfx.bios").c_str());
  std::string fxscsi_path = MDFN_GetSettingS("pcfx.fxscsi");	// For developers only, so don't make it convenient.
@@ -575,25 +586,32 @@ static bool LoadCommon(void)
   return(0);
  }
 
+ CD_TrayOpen = false;
+ CD_SelectedDisc = 0;
+
+ SCSICD_SetDisc(true, NULL, true);
+ SCSICD_SetDisc(false, (*CDInterfaces)[0], true);
+
+
  #ifdef WANT_DEBUGGER
+ for(unsigned disc = 0; disc < CDInterfaces->size(); disc++)
  {
-  CD_TOC toc;
+  CDUtility::TOC toc;
 
-  if(CDIF_ReadTOC(&toc))
+  (*CDInterfaces)[disc]->ReadTOC(&toc);
+
+  for(int32 track = toc.first_track; track <= toc.last_track; track++)
   {
-   for(int32 track = toc.first_track; track <= toc.last_track; track++)
+   if(toc.tracks[track].control & 0x4)
    {
-    if(toc.tracks[track].control & 0x4)
-    {
-     char tmpn[256], tmpln[256];
-     uint32 sectors;
+    char tmpn[256], tmpln[256];
+    uint32 sectors;
 
-     trio_snprintf(tmpn, 256, "track%d", track);
-     trio_snprintf(tmpln, 256, "CD Track %d", track);
+    trio_snprintf(tmpn, 256, "track%d-%d-%d", disc, track, toc.tracks[track].lba);
+    trio_snprintf(tmpln, 256, "CD - Disc %d/%d - Track %d/%d", disc + 1, CDInterfaces->size(), track, toc.last_track - toc.first_track + 1);
 
-     sectors = CDIF_GetTrackSectorCount(track);
-     ASpace_Add(PCFXDBG_GetAddressSpaceBytes, PCFXDBG_PutAddressSpaceBytes, tmpn, tmpln, 0, sectors * 2048);
-    }
+    sectors = toc.tracks[track + 1].lba - toc.tracks[track].lba;
+    ASpace_Add(PCFXDBG_GetAddressSpaceBytes, PCFXDBG_PutAddressSpaceBytes, tmpn, tmpln, 0, sectors * 2048);
    }
   }
  }
@@ -604,7 +622,10 @@ static bool LoadCommon(void)
 
  MDFNGameInfo->nominal_height = MDFN_GetSettingUI("pcfx.slend") - MDFN_GetSettingUI("pcfx.slstart") + 1;
 
- MDFNGameInfo->lcm_width = 1024;
+ // Emulation raw framebuffer image should always be of 256 width when the pcfx.high_dotclock_width setting is set to "256",
+ // but it could be either 256 or 341 when the setting is set to "341", so stay with 1024 in that case so we won't have
+ // a messed up aspect ratio in our recorded QuickTime movies.
+ MDFNGameInfo->lcm_width = (MDFN_GetSettingUI("pcfx.high_dotclock_width") == 256) ? 256 : 1024;
  MDFNGameInfo->lcm_height = MDFNGameInfo->nominal_height;
 
  MDFNMP_Init(1024 * 1024, ((uint64)1 << 32) / (1024 * 1024));
@@ -693,10 +714,10 @@ static bool LoadCommon(void)
  return(1);
 }
 
-static void DoMD5CDVoodoo(void)
+static void DoMD5CDVoodoo(std::vector<CDIF *> *CDInterfaces)
 {
  const CDGameEntry *found_entry = NULL;
- CD_TOC toc;
+ CDUtility::TOC toc;
 
  #if 0
  puts("{");
@@ -722,88 +743,92 @@ static void DoMD5CDVoodoo(void)
  //exit(1);
  #endif
 
- CDIF_ReadTOC(&toc);
-
- if(toc.first_track == 1)
+ for(unsigned if_disc = 0; if_disc < CDInterfaces->size(); if_disc++)
  {
-  for(unsigned int g = 0; g < sizeof(GameList) / sizeof(CDGameEntry); g++)
+  (*CDInterfaces)[if_disc]->ReadTOC(&toc);
+
+  if(toc.first_track == 1)
   {
-   const CDGameEntry *entry = &GameList[g];
-
-   assert(entry->discs == 1 || entry->discs == 2);
-
-   for(unsigned int disc = 0; disc < entry->discs; disc++)
+   for(unsigned int g = 0; g < sizeof(GameList) / sizeof(CDGameEntry); g++)
    {
-    const CDGameEntryTrack *et = entry->tracks[disc];
-    bool GameFound = TRUE;
+    const CDGameEntry *entry = &GameList[g];
 
-    while(et->tracknum != -1 && GameFound)
+    assert(entry->discs == 1 || entry->discs == 2);
+
+    for(unsigned int disc = 0; disc < entry->discs; disc++)
     {
-     assert(et->tracknum > 0 && et->tracknum < 100);
+     const CDGameEntryTrack *et = entry->tracks[disc];
+     bool GameFound = TRUE;
 
-     if(toc.tracks[et->tracknum].lba != et->lba)
-      GameFound = FALSE;
+     while(et->tracknum != -1 && GameFound)
+     {
+      assert(et->tracknum > 0 && et->tracknum < 100);
 
-     if( ((et->format == CDGE_FORMAT_DATA) ? 0x4 : 0x0) != (toc.tracks[et->tracknum].control & 0x4))
-      GameFound = FALSE;
+      if(toc.tracks[et->tracknum].lba != et->lba)
+       GameFound = FALSE;
 
-     et++;
-    }
+      if( ((et->format == CDGE_FORMAT_DATA) ? 0x4 : 0x0) != (toc.tracks[et->tracknum].control & 0x4))
+       GameFound = FALSE;
 
-    if(et->tracknum == -1)
-    {
-     if((et - 1)->tracknum != toc.last_track)
-      GameFound = FALSE;
- 
-     if(et->lba != toc.tracks[100].lba)
-      GameFound = FALSE;
-    }
-
-    if(GameFound)
-    {
-     found_entry = entry;
-     goto FoundIt;
-    }
-   } // End disc count loop
-  }
- }
-
- FoundIt: ;
-
- if(found_entry)
- {
-  EmuFlags = found_entry->flags;
-
-  if(found_entry->discs > 1)
-  {
-   const char *hash_prefix = "Mednafen PC-FX Multi-Game Set";
-   md5_context md5_gameset;
-
-   md5_gameset.starts();
-
-   md5_gameset.update_string(hash_prefix);
-
-   for(unsigned int disc = 0; disc < found_entry->discs; disc++)
-   {
-    const CDGameEntryTrack *et = found_entry->tracks[disc];
-
-    while(et->tracknum)
-    {
-     md5_gameset.update_u32_as_lsb(et->tracknum);
-     md5_gameset.update_u32_as_lsb((uint32)et->format);
-     md5_gameset.update_u32_as_lsb(et->lba);
+      et++;
+     }
 
      if(et->tracknum == -1)
-      break;
-     et++;
-    }
+     {
+      if((et - 1)->tracknum != toc.last_track)
+       GameFound = FALSE;
+ 
+      if(et->lba != toc.tracks[100].lba)
+       GameFound = FALSE;
+     }
+
+     if(GameFound)
+     {
+      found_entry = entry;
+      goto FoundIt;
+     }
+    } // End disc count loop
    }
-   md5_gameset.finish(MDFNGameInfo->GameSetMD5);
-   MDFNGameInfo->GameSetMD5Valid = TRUE;
   }
-  //printf("%s\n", found_entry->name);
-  MDFNGameInfo->name = (UTF8*)strdup(found_entry->name);
- }
+
+  FoundIt: ;
+
+  if(found_entry)
+  {
+   EmuFlags = found_entry->flags;
+
+   if(found_entry->discs > 1)
+   {
+    const char *hash_prefix = "Mednafen PC-FX Multi-Game Set";
+    md5_context md5_gameset;
+
+    md5_gameset.starts();
+
+    md5_gameset.update_string(hash_prefix);
+
+    for(unsigned int disc = 0; disc < found_entry->discs; disc++)
+    {
+     const CDGameEntryTrack *et = found_entry->tracks[disc];
+
+     while(et->tracknum)
+     {
+      md5_gameset.update_u32_as_lsb(et->tracknum);
+      md5_gameset.update_u32_as_lsb((uint32)et->format);
+      md5_gameset.update_u32_as_lsb(et->lba);
+
+      if(et->tracknum == -1)
+       break;
+      et++;
+     }
+    }
+    md5_gameset.finish(MDFNGameInfo->GameSetMD5);
+    MDFNGameInfo->GameSetMD5Valid = TRUE;
+   }
+   //printf("%s\n", found_entry->name);
+   MDFNGameInfo->name = (UTF8*)strdup(found_entry->name);
+   break;
+  }
+ } // end: for(unsigned if_disc = 0; if_disc < CDInterfaces->size(); if_disc++)
 
  MDFN_printf(_("CD Layout MD5:   0x%s\n"), md5_context::asciistr(MDFNGameInfo->MD5, 0).c_str());
 
@@ -813,21 +838,21 @@ static void DoMD5CDVoodoo(void)
 
 // PC-FX BIOS will look at all data tracks(not just the first one), in contrast to the PCE CD BIOS, which only looks
 // at the first data track.
-static bool TestMagicCD(void)
+static bool TestMagicCD(std::vector<CDIF *> *CDInterfaces)
 {
- CD_TOC toc;
+ CDIF *cdiface = (*CDInterfaces)[0];
+ CDUtility::TOC toc;
  uint8 sector_buffer[2048];
 
  memset(sector_buffer, 0, sizeof(sector_buffer));
 
- if(!CDIF_ReadTOC(&toc))
-  return(FALSE);
+ cdiface->ReadTOC(&toc);
 
  for(int32 track = toc.first_track; track <= toc.last_track; track++)
  {
   if(toc.tracks[track].control & 0x4)
   {
-   CDIF_ReadSector(sector_buffer, toc.tracks[track].lba, 1);
+   cdiface->ReadSector(sector_buffer, toc.tracks[track].lba, 1);
    if(!strncmp("PC-FX:Hu_CD-ROM", (char*)sector_buffer, strlen("PC-FX:Hu_CD-ROM")))
    {
     return(TRUE);
@@ -840,13 +865,15 @@ static bool TestMagicCD(void)
  return(FALSE);
 }
 
-static int LoadCD(void)
+static int LoadCD(std::vector<CDIF *> *CDInterfaces)
 {
  EmuFlags = 0;
 
- DoMD5CDVoodoo();
+ cdifs = CDInterfaces;
 
- if(!LoadCommon())
+ DoMD5CDVoodoo(CDInterfaces);
+
+ if(!LoadCommon(CDInterfaces))
   return(0);
 
  MDFN_printf(_("Emulated CD-ROM drive speed: %ux\n"), (unsigned int)MDFN_GetSettingUI("pcfx.cdspeed"));
@@ -858,43 +885,47 @@ static int LoadCD(void)
  return(1);
 }
 
-static int PCFX_CDInsert(int oride)
+static void PCFX_CDInsertEject(void)
 {
- if(1)
+ CD_TrayOpen = !CD_TrayOpen;
+
+ for(unsigned disc = 0; disc < cdifs->size(); disc++)
  {
-  if(SCSICD_IsInserted())
+  if(!(*cdifs)[disc]->Eject(CD_TrayOpen))
   {
-   SCSICD_EjectVirtual();
-   MDFN_DispMessage(_("Virtual CD Ejected"));
+   MDFN_DispMessage(_("Eject error."));
+   CD_TrayOpen = !CD_TrayOpen;
   }
-  else
-  {
-   SCSICD_InsertVirtual();
-   MDFN_DispMessage(_("Virtual CD Inserted"));
-  }
-  return(1);
  }
+
+ if(CD_TrayOpen)
+  MDFN_DispMessage(_("Virtual CD Drive Tray Open"));
  else
- {
-  return(1);
- }
- return(0);
+  MDFN_DispMessage(_("Virtual CD Drive Tray Closed"));
+
+ SCSICD_SetDisc(CD_TrayOpen, (CD_SelectedDisc >= 0 && !CD_TrayOpen) ? (*cdifs)[CD_SelectedDisc] : NULL);
 }
 
-static int PCFX_CDEject(void)
+static void PCFX_CDEject(void)
 {
- if(SCSICD_IsInserted())
- {
-  SCSICD_EjectVirtual();
-  MDFN_DispMessage(_("Virtual CD Ejected"));
-  return(1);
- }
- return(0);
+ if(!CD_TrayOpen)
+  PCFX_CDInsertEject();
 }
 
-static int PCFX_CDSelect(void)
+static void PCFX_CDSelect(void)
 {
- return(0);
+ if(cdifs && CD_TrayOpen)
+ {
+  CD_SelectedDisc = (CD_SelectedDisc + 1) % (cdifs->size() + 1);
+
+  if((unsigned)CD_SelectedDisc == cdifs->size())
+   CD_SelectedDisc = -1;
+
+  if(CD_SelectedDisc == -1)
+   MDFN_DispMessage(_("Disc absence selected."));
+  else
+   MDFN_DispMessage(_("Disc %d of %d selected."), CD_SelectedDisc + 1, (int)cdifs->size());
+ }
 }
 
 static void CloseGame(void)
@@ -906,7 +937,7 @@ static void CloseGame(void)
   EvilRams.push_back(PtrLengthPair(BackupRAM, 0x8000));
   EvilRams.push_back(PtrLengthPair(ExBackupRAM, 0x8000));
 
-  MDFN_DumpToFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav").c_str(), 6, EvilRams);
+  MDFN_DumpToFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav").c_str(), 0, EvilRams);
  }
 
  for(int i = 0; i < 2; i++)
@@ -930,7 +961,7 @@ static void DoSimpleCommand(int cmd)
  switch(cmd)
  {
    case MDFN_MSC_INSERT_DISK:
-		PCFX_CDInsert(-1);
+		PCFX_CDInsertEject();
                 break;
 
    case MDFN_MSC_SELECT_DISK:
@@ -964,6 +995,9 @@ static int StateAction(StateMem *sm, int load, int data_only)
   SFVAR(next_adpcm_ts),
   SFVAR(next_king_ts),
 
+  SFVAR(CD_TrayOpen),
+  SFVAR(CD_SelectedDisc),
+
   SFEND
  };
 
@@ -985,6 +1019,15 @@ static int StateAction(StateMem *sm, int load, int data_only)
  {
   //clamp(&PCFX_V810.v810_timestamp, 0, 30 * 1000 * 1000);
   //PCFX_SetEvent(PCFX_EVENT_SCSI, SCSICD_Run(v810_timestamp)); // hmm, fixme?
+
+  if(cdifs)
+  {
+   // Sanity check.
+   if(CD_SelectedDisc >= (int)cdifs->size())
+    CD_SelectedDisc = (int)cdifs->size() - 1;
+
+   SCSICD_SetDisc(CD_TrayOpen, (CD_SelectedDisc >= 0 && !CD_TrayOpen) ? (*cdifs)[CD_SelectedDisc] : NULL, true);
+  }
  }
 
  return(ret);
@@ -1027,22 +1070,19 @@ static MDFNSetting PCFXSettings[] =
   { "pcfx.mouse_sensitivity", MDFNSF_NOFLAGS, gettext_noop("Mouse sensitivity."), NULL, MDFNST_FLOAT, "1.25", NULL, NULL },
   { "pcfx.disable_softreset", MDFNSF_NOFLAGS, gettext_noop("When RUN+SEL are pressed simultaneously, disable both buttons temporarily."), NULL, MDFNST_BOOL, "0", NULL, NULL, NULL, FXINPUT_SettingChanged },
 
-#ifndef WII
   { "pcfx.cpu_emulation", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("CPU emulation mode."), NULL, MDFNST_ENUM, "auto", NULL, NULL, NULL, NULL, V810Mode_List },
-#else
-  { "pcfx.cpu_emulation", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("CPU emulation mode."), NULL, MDFNST_ENUM, "auto", NULL, NULL, NULL, NULL, V810Mode_List },
-#endif
   { "pcfx.bios", MDFNSF_EMU_STATE, gettext_noop("Path to the ROM BIOS"), NULL, MDFNST_STRING, "pcfx.rom" },
   { "pcfx.fxscsi", MDFNSF_EMU_STATE, gettext_noop("Path to the FX-SCSI ROM"), gettext_noop("Intended for developers only."), MDFNST_STRING, "0" },
   { "pcfx.disable_bram", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("Disable internal and external BRAM."), gettext_noop("It is intended for viewing games' error screens that may be different from simple BRAM full and uninitialized BRAM error screens, though it can cause the game to crash outright."), MDFNST_BOOL, "0" },
-  { "pcfx.cdspeed", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("Emulated CD-ROM speed."), gettext_noop("Setting this to \"1\" will probably cause most games with FMV to break, but setting it higher than 2, the default, will decrease loading times in most games by some degree."), MDFNST_UINT, "2", "1", "10" },
+  { "pcfx.cdspeed", MDFNSF_EMU_STATE | MDFNSF_UNTRUSTED_SAFE, gettext_noop("Emulated CD-ROM speed."), gettext_noop("Setting the value higher than 2, the default, will decrease loading times in most games by some degree."), MDFNST_UINT, "2", "2", "10" },
 
   { "pcfx.nospritelimit", MDFNSF_NOFLAGS, gettext_noop("Remove 16-sprites-per-scanline hardware limit."), NULL, MDFNST_BOOL, "0" },
-#ifndef WII  
+#ifndef WII
   { "pcfx.high_dotclock_width", MDFNSF_NOFLAGS, gettext_noop("Emulated width for 7.16MHz dot-clock mode."), gettext_noop("Lower values are faster, but will cause some degree of pixel distortion."), MDFNST_ENUM, "1024", NULL, NULL, NULL, NULL, HDCWidthList },
 #else
   { "pcfx.high_dotclock_width", MDFNSF_NOFLAGS, gettext_noop("Emulated width for 7.16MHz dot-clock mode."), gettext_noop("Lower values are faster, but will cause some degree of pixel distortion."), MDFNST_ENUM, "341", NULL, NULL, NULL, NULL, HDCWidthList },
 #endif
+
   { "pcfx.slstart", MDFNSF_NOFLAGS, gettext_noop("First rendered scanline."), NULL, MDFNST_UINT, "4", "0", "239" },
   { "pcfx.slend", MDFNSF_NOFLAGS, gettext_noop("Last rendered scanline."), NULL, MDFNST_UINT, "235", "0", "239" },
 
@@ -1319,7 +1359,7 @@ static DebuggerInfoStruct DBGInfo =
  32,
  32,
  0x00000000,
- ~0,
+ ~0U,
 
  PCFXDBG_MemPeek,
  PCFXDBG_Disassemble,
@@ -1359,11 +1399,14 @@ MDFNGI EmulatedPCFX =
  LoadCD,
  TestMagicCD,
  CloseGame,
- KING_ToggleLayer,
+ KING_SetLayerEnableMask,
  "BG0\0BG1\0BG2\0BG3\0VDC-A BG\0VDC-A SPR\0VDC-B BG\0VDC-B SPR\0RAINBOW\0",
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  FXINPUT_SetInput,

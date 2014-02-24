@@ -24,10 +24,6 @@
 #include "jrevdct.h"
 #include "../clamp.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 static bool ChromaIP;	// Bilinearly interpolate chroma channel
 
 /* Y = luminance/luma, UV = chrominance/chroma */
@@ -239,26 +235,30 @@ static const uint8 zigzag[63] =
  0x3C, 0x3D, 0x36, 0x2F, 0x37, 0x3E, 0x3F
 };
 
-static HuffmanQuickLUT dc_y_qlut, dc_uv_qlut, ac_y_qlut, ac_uv_qlut;
+static HuffmanQuickLUT dc_y_qlut = { NULL }, dc_uv_qlut = { NULL}, ac_y_qlut = { NULL }, ac_uv_qlut = { NULL };
+
+static void KillHuffmanLUT(HuffmanQuickLUT *qlut)
+{
+ if(qlut->lut)
+  MDFN_free(qlut->lut);
+
+ if(qlut->lut_bits)
+  MDFN_free(qlut->lut_bits);
+
+ qlut->lut = NULL;
+ qlut->lut_bits = NULL;
+}
 
 static bool BuildHuffmanLUT(const HuffmanTable *table, HuffmanQuickLUT *qlut, const int bitmax)
 {
  // TODO: Allocate only (1 << bitmax) entries.
  // TODO: What should we set invalid bitsequences/entries to? 0? ~0?  Something else?
 
-#ifdef MEM2
- if(!(qlut->lut = (uint8 *)Mem2ManagerCalloc(1 << 12, 1, _("Huffman LUT"))))
-#else
  if(!(qlut->lut = (uint8 *)MDFN_calloc(1 << 12, 1, _("Huffman LUT"))))
-#endif
-   return(FALSE);
+  return(FALSE);
 
-#ifdef MEM2
- if(!(qlut->lut_bits = (uint8 *)Mem2ManagerCalloc(1 << 12, 1, _("Huffman LUT"))))
-#else
  if(!(qlut->lut_bits = (uint8 *)MDFN_calloc(1 << 12, 1, _("Huffman LUT"))))
-#endif
-   return(FALSE);
+  return(FALSE);
 
  for(int numbits = 2; numbits <= 12; numbits++)
  {
@@ -653,12 +653,8 @@ bool RAINBOW_Init(bool arg_ChromaIP)
 
  for(int i = 0; i < 2; i++)
  {
-#ifdef MEM2
-  if(!(DecodeBuffer[i] = (uint8*)Mem2ManagerAlloc(0x2000 * 4, _("RAINBOW buffer RAM"))))
-#else
   if(!(DecodeBuffer[i] = (uint8*)MDFN_malloc(0x2000 * 4, _("RAINBOW buffer RAM"))))
-#endif
-    return(0);
+   return(0);
   memset(DecodeBuffer[i], 0, 0x2000 * 4);
  }
 
@@ -688,11 +684,14 @@ void RAINBOW_Close(void)
  for(int i = 0; i < 2; i++)
   if(DecodeBuffer[i])
   {
-#ifndef MEM2
-   MDFN_free(DecodeBuffer[i]);
-#endif
+   free(DecodeBuffer[i]);
    DecodeBuffer[i] = NULL;
   }
+
+ KillHuffmanLUT(&dc_y_qlut);
+ KillHuffmanLUT(&dc_uv_qlut);
+ KillHuffmanLUT(&ac_y_qlut);
+ KillHuffmanLUT(&ac_uv_qlut);
 }
 
 // RAINBOW base I/O port address: 0x200

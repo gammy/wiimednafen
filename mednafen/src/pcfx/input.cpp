@@ -379,6 +379,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "none",
   "none",
   NULL,
+  NULL,
   0,
   NULL,
  },
@@ -387,6 +388,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
  {
   "gamepad",
   "Gamepad",
+  NULL,
   NULL,
   sizeof(PCFX_GamepadIDII) / sizeof(InputDeviceInputInfoStruct),
   PCFX_GamepadIDII,
@@ -397,6 +399,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "mouse",
   "Mouse",
   NULL,
+  NULL,
   sizeof(PCFX_MouseIDII) / sizeof(InputDeviceInputInfoStruct),
   PCFX_MouseIDII
  }
@@ -404,14 +407,14 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
 
 static const InputPortInfoStruct PortInfo[] =
 {
- { 0, "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port3", "Port 3", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port4", "Port 4", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port5", "Port 5", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port6", "Port 6", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port7", "Port 7", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port8", "Port 8", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port3", "Port 3", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port4", "Port 4", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port5", "Port 5", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port6", "Port 6", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port7", "Port 7", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port8", "Port 8", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
 };
 
 InputInfoStruct PCFXInputInfo =

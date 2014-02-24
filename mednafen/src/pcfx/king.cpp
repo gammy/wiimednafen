@@ -47,14 +47,6 @@
 #include "../video.h"
 #include "../clamp.h"
 
-#if PCFX_BPP==16
-#include "wii_sdl.h"
-#endif 
-
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 #ifdef __MMX__
 #include <mmintrin.h>
 #endif
@@ -104,26 +96,6 @@ typedef struct
  bool in_vdc_hsync;
 
  bool frame_interlaced;
-
- /*						   */
- /* Begin emulation-specific interlaced variables. */
- /* 	Don't bother saving these in save states?  */
- /*	Or if we do, they need lots of sanity checks. */
- /*	TODO: handle emulator(output) pixel format changes.	   */
- uint32 interlaced_count;                /* Number of contiguous(set to 0 if interlacing is disabled) frame starts that happened
-					    with interlacing mode enabled.
-					 */
-#if PCFX_BPP==16
- uint16 *LastField;	//[1024 * 256];
-#else
- uint32 *LastField;	//[1024 * 256];
-#endif
- MDFN_Rect LastLineWidths[256];
- //bool LastFieldValid = 0;
-
- /* 						 */
- /* End emulation-specific interlaced variables. */
- /*						 */
 
  uint16 picture_mode;
 
@@ -323,7 +295,7 @@ static INLINE void RebuildLayerPrioCache(void)
  int RemapPriority = 1;
  bool Done[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
- for(int i = 1; i < (1 + 8); i++)
+ for(unsigned int i = 1; i < (1 + 8); i++)
  {
   for(int n = 0; n < 4; n++)
   {
@@ -563,10 +535,79 @@ uint8 KING_MemPeek(uint32 A)
  return(ret);
 }
 
+static void Do16BitGet(const char *name, uint32 Address, uint32 Length, uint8 *Buffer)
+{
+ int wc = 0;
+
+ if(!strcmp(name, "vdcvram0"))
+  wc = 0;
+ else if(!strcmp(name, "vdcvram1"))
+  wc = 1;
+
+ while(Length)
+ {
+  uint16 data;
+
+  data = fx_vdc_chips[wc & 1]->PeekVRAM((Address >> 1) & 0xFFFF);
+
+  if((Address & 1) || Length == 1)
+  {
+   *Buffer = data >> ((Address & 1) << 3);
+   Buffer++;
+   Address++;
+   Length--;
+  }
+  else
+  {
+   Buffer[0] = data & 0xFF;
+   Buffer[1] = data >> 8;
+
+   Buffer += 2;
+   Address += 2;
+   Length -= 2;
+  }
+ }
+}
+
+static void Do16BitPut(const char *name, uint32 Address, uint32 Length, uint32 Granularity, bool hl, const uint8 *Buffer)
+{
+ int wc = 0;
+
+ if(!strcmp(name, "vdcvram0"))
+  wc = 0;
+ else if(!strcmp(name, "vdcvram1"))
+  wc = 1;
+
+ while(Length)
+ {
+  uint16 data;
+  int inc_amount;
+
+  if((Address & 1) || Length == 1)
+  {
+   data = fx_vdc_chips[wc & 1]->PeekVRAM((Address >> 1) & 0xFFFF);
+
+   data &= ~(0xFF << ((Address & 1) << 3));
+   data |= *Buffer << ((Address & 1) << 3);
+
+   inc_amount = 1;
+  }
+  else
+  {
+   data = Buffer[0] | (Buffer[1] << 8);
+   inc_amount = 2;
+  }
+
+  fx_vdc_chips[wc & 1]->PokeVRAM((Address >> 1) & 0xFFFF, data);
+
+  Buffer += inc_amount;
+  Address += inc_amount;
+  Length -= inc_amount;
+ }
+}
+
 static void KING_GetAddressSpaceBytes(const char *name, uint32 Address, uint32 Length, uint8 *Buffer)
 {
- int which;
-
  if(!strcmp(name, "kram0") || !strcmp(name, "kram1"))
  {
   int wk = name[4] - '0';
@@ -588,17 +629,10 @@ static void KING_GetAddressSpaceBytes(const char *name, uint32 Address, uint32 L
    Buffer++;
   }
  }
- else if(trio_sscanf(name, "vdcvram%d", &which) == 1)
- {
-  //FXVDC_GetAddressSpaceBytes(fx_vdc_chips[which], "vram", Address, Length, Buffer);
- }
-
 }
 
 static void KING_PutAddressSpaceBytes(const char *name, uint32 Address, uint32 Length, uint32 Granularity, bool hl, const uint8 *Buffer)
 {
- int which;
-
  if(!strcmp(name, "kram0") || !strcmp(name, "kram1"))
  {
   int wk = name[4] - '0';
@@ -621,11 +655,6 @@ static void KING_PutAddressSpaceBytes(const char *name, uint32 Address, uint32 L
    Buffer++;
   }
  }
- else if(trio_sscanf(name, "vdcvram%d", &which) == 1)
- {
-  //FXVDC_PutAddressSpaceBytes(fx_vdc_chips[which], "vram", Address, Length, Granularity, hl, Buffer);
- }
-
 }
 #endif
 
@@ -1191,7 +1220,7 @@ uint16 KING_Read16(const v810_timestamp_t timestamp, uint32 A)
 
 	                 #ifdef WANT_DEBUGGER 
 			 if(KRAMReadBPE) 
-			  PCFXDBG_CheckBP(BPOINT_AUX_READ, (king->KRAMRA & 0x3FFFF) | (page ? 0x40000 : 0), 1);
+			  PCFXDBG_CheckBP(BPOINT_AUX_READ, (king->KRAMRA & 0x3FFFF) | (page ? 0x40000 : 0), 0, 1);
 			 #endif
 	
                          king->KRAMRA = (king->KRAMRA &~ 0x1FFFF) | ((king->KRAMRA + inc_amount) & 0x1FFFF);
@@ -1467,7 +1496,7 @@ void KING_Write16(const v810_timestamp_t timestamp, uint32 A, uint16 V)
 
 		           #ifdef WANT_DEBUGGER 
                            if(KRAMWriteBPE)
-                            PCFXDBG_CheckBP(BPOINT_AUX_WRITE, (king->KRAMWA & 0x3FFFF) | (page ? 0x40000 : 0), 1);
+                            PCFXDBG_CheckBP(BPOINT_AUX_WRITE, (king->KRAMWA & 0x3FFFF) | (page ? 0x40000 : 0), V, 1);
 			   #endif
 
 			   king->KRAM[page][king->KRAMWA & 0x3FFFF] = V;
@@ -1706,12 +1735,8 @@ extern Blip_Buffer FXsbuf[2]; // FIXME, externals are evil!
 
 bool KING_Init(void)
 {
-#ifdef MEM2
- if(!(king = (king_t*)Mem2ManagerAlloc(sizeof(king_t), _("KING Data"))))
-#else
  if(!(king = (king_t*)MDFN_malloc(sizeof(king_t), _("KING Data"))))
-#endif
-   return(0);
+  return(0);
 
  HighDotClockWidth = MDFN_GetSettingUI("pcfx.high_dotclock_width");
  BGLayerDisable = 0;
@@ -1773,65 +1798,31 @@ bool KING_Init(void)
  #ifdef WANT_DEBUGGER
  ASpace_Add(KING_GetAddressSpaceBytes, KING_PutAddressSpaceBytes, "kram0", "KRAM Page 0", 19);
  ASpace_Add(KING_GetAddressSpaceBytes, KING_PutAddressSpaceBytes, "kram1", "KRAM Page 1", 19);
- ASpace_Add(KING_GetAddressSpaceBytes, KING_PutAddressSpaceBytes, "vdcvram0", "VDC-A VRAM", 17);
- ASpace_Add(KING_GetAddressSpaceBytes, KING_PutAddressSpaceBytes, "vdcvram1", "VDC-B VRAM", 17);
+ ASpace_Add(Do16BitGet, Do16BitPut, "vdcvram0", "VDC-A VRAM", 17);
+ ASpace_Add(Do16BitGet, Do16BitPut, "vdcvram1", "VDC-B VRAM", 17);
  ASpace_Add(KING_GetAddressSpaceBytes, KING_PutAddressSpaceBytes, "vce", "VCE Palette RAM", 10);
  #endif
 
  SCSICD_Init(SCSICD_PCFX, 3, &FXsbuf[0], &FXsbuf[1], 153600 * MDFN_GetSettingUI("pcfx.cdspeed"), 21477273, KING_CDIRQ, KING_StuffSubchannels);
-
-#if PCFX_BPP==16
-#ifdef MEM2
- if(!(fx_vce.LastField = (uint16 *)Mem2ManagerCalloc(1024 * 256, sizeof(uint16), _("Interlaced mode last field buffer"))))
-#else
- if(!(fx_vce.LastField = (uint16 *)MDFN_calloc(1024 * 256, sizeof(uint16), _("Interlaced mode last field buffer"))))
-#endif
-   return(0);
-#else
-#ifdef MEM2
- if(!(fx_vce.LastField = (uint32 *)Mem2ManagerCalloc(1024 * 256, sizeof(uint32), _("Interlaced mode last field buffer"))))
-#else
- if(!(fx_vce.LastField = (uint32 *)MDFN_calloc(1024 * 256, sizeof(uint32), _("Interlaced mode last field buffer"))))
-#endif
-   return(0);
-#endif
 
  return(1);
 }
 
 void KING_Close(void)
 {
-#ifndef MEM2
- if(fx_vce.LastField)
-  MDFN_free(fx_vce.LastField);
-#endif
-
  if(king)
  {
-#ifndef MEM2
-  MDFN_free(king);
-#endif
+  free(king);
   king = NULL;
  }
-
-#ifdef WII
-  SCSICD_Close();
-#endif
+ SCSICD_Close();
 }
 
 
 void KING_Reset(void)
 {
-#if PCFX_BPP==16
- uint16 *lf_save = fx_vce.LastField;
-#else
- uint32 *lf_save = fx_vce.LastField;
-#endif
-
  memset(&fx_vce, 0, sizeof(fx_vce));
  memset(king, 0, sizeof(king_t));
-
- fx_vce.LastField = lf_save;
 
  king->Reg00 = 0;
  king->Reg01 = 0;
@@ -1962,7 +1953,7 @@ static void DrawBG(uint32 *target, int n, bool sub)
   { 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1 },
  };
 
-
+#if 0
  const uint32 cg_per_mode[0x8] = 
  {
   0, // Invalid mode
@@ -1974,7 +1965,7 @@ static void DrawBG(uint32 *target, int n, bool sub)
   8, // 16-bit mode
   8, // 16-bit mode
  };
-
+#endif
  const uint32 layer_or = (LAYER_BG0 + n) << 28;
 
  const uint32 palette_offset = ((fx_vce.palette_offset[1 + (n >> 1)] >> ((n & 1) ? 8 : 0)) << 1) & 0x1FF;
@@ -2269,7 +2260,7 @@ static void DrawBG(uint32 *target, int n, bool sub)
                           {                                     	\
                            uint32 eff_bat_loc = bat_offset;     	\
                            uint16 bat = 0;                      	\
-                           uint16 pbn = 0;                      	\
+                           uint16 pbn MDFN_NOWARN_UNUSED = 0;           \
   		  	   const uint16 *cgptr[2];			\
 			   uint16 cg[cg_needed];			\
 									\
@@ -2299,7 +2290,7 @@ static void DrawBG(uint32 *target, int n, bool sub)
 			  {										\
                            uint32 eff_bat_loc = bat_sub_offset;         \
                            uint16 bat = 0;                              \
-                           uint16 pbn = 0;                              \
+                           uint16 pbn MDFN_NOWARN_UNUSED = 0;           \
                            const uint16 *cgptr[2];                      \
                            uint16 cg[cg_needed];                        \
                                                                         \
@@ -2413,7 +2404,6 @@ static void RebuildUVLUT(const MDFN_PixelFormat &format)
 
 // FIXME
 static int rs, gs, bs;
-
 static uint32 INLINE YUV888_TO_RGB888(uint32 yuv)
 {
  int32 r, g, b;
@@ -2427,11 +2417,19 @@ static uint32 INLINE YUV888_TO_RGB888(uint32 yuv)
  g = clamp_to_u8(g);
  b = clamp_to_u8(b);
 
-#if PCFX_BPP==16
- return wii_sdl_rgb( r, g, b );
-#else
  return((r << rs) | (g << gs) | (b << bs));
-#endif
+}
+
+static uint32 INLINE YUV888_TO_PF(const uint32 yuv, const MDFN_PixelFormat &pf, const uint8 a = 0x00)
+{
+ const uint8 y = yuv >> 16;
+ uint8 r, g, b;
+
+ r = clamp_to_u8((int32)(y + UVLUT[yuv & 0xFFFF][0]));
+ g = clamp_to_u8((int32)(y + UVLUT[yuv & 0xFFFF][1]));
+ b = clamp_to_u8((int32)(y + UVLUT[yuv & 0xFFFF][2]));
+
+ return pf.MakeColor(r, g, b, a);
 }
 
 static uint32 INLINE YUV888_TO_YCbCr888(uint32 yuv)
@@ -2451,16 +2449,20 @@ static MDFN_Rect *DisplayRect;
 static MDFN_Rect *LineWidths;
 static int skip;
 
-void KING_StartFrame(VDC **arg_vdc_chips, MDFN_Surface *arg_surface, MDFN_Rect *arg_DisplayRect, MDFN_Rect *arg_LineWidths, int arg_skip)
+void KING_StartFrame(VDC **arg_vdc_chips, EmulateSpecStruct *espec)	//MDFN_Surface *arg_surface, MDFN_Rect *arg_DisplayRect, MDFN_Rect *arg_LineWidths, int arg_skip)
 {
  ::vdc_chips = arg_vdc_chips;
- ::surface = arg_surface;
- ::DisplayRect = arg_DisplayRect;
- ::LineWidths = arg_LineWidths;
- ::skip = arg_skip;
+ ::surface = espec->surface;
+ ::DisplayRect = &espec->DisplayRect;
+ ::LineWidths = espec->LineWidths;
+ ::skip = espec->skip;
 
  //MDFN_DispMessage("P0:%06x P1:%06x; I0: %06x I1: %06x", king->ADPCMPlayAddress[0], king->ADPCMPlayAddress[1], king->ADPCMIntermediateAddress[0] << 6, king->ADPCMIntermediateAddress[1] << 6);
  //MDFN_DispMessage("%d %d\n", SCSICD_GetACK(), SCSICD_GetREQ());
+
+ // For the case of interlaced mode(clear ~0 state)
+ LineWidths[0].x = 0;
+ LineWidths[0].w = 0;
 
  // These 2 should be overwritten in the big loop below.
  DisplayRect->x = 0;
@@ -2469,15 +2471,14 @@ void KING_StartFrame(VDC **arg_vdc_chips, MDFN_Surface *arg_surface, MDFN_Rect *
  DisplayRect->y = MDFN_GetSettingUI("pcfx.slstart");
  DisplayRect->h = MDFN_GetSettingUI("pcfx.slend") - DisplayRect->y + 1;
 
-
- if(fx_vce.interlaced_count >= 1)
+ if(fx_vce.frame_interlaced)
  {
-  skip = FALSE;
-  if(fx_vce.interlaced_count == 2)
-  {
-   DisplayRect->y *= 2;
-   DisplayRect->h *= 2;
-  }
+  skip = false;
+
+  espec->InterlaceOn = true;
+  espec->InterlaceField = fx_vce.odd_field;
+  DisplayRect->y *= 2;
+  DisplayRect->h *= 2;
  }
 }
 
@@ -2489,7 +2490,7 @@ static void DrawActive(void)
  rb_type = -1;
 
  #ifdef WANT_DEBUGGER
- if(GfxDecode_Buf && GfxDecode_Line == fx_vce.raster_counter)
+ if(GfxDecode_Buf && GfxDecode_Line == (int32)fx_vce.raster_counter)
   DoGfxDecode();
  #endif
 
@@ -2660,8 +2661,8 @@ static INLINE void VDC_PIXELMIX(bool SPRCOMBO_ON, bool BGCOMBO_ON)
 {
     static const uint32 vdc_layer_num[2] = { LAYER_VDC_BG << 28, LAYER_VDC_SPR << 28};
     const uint32 vdc_poffset[2] = {
-                                ((fx_vce.palette_offset[0] >> 0) & 0xFF) << 1, // BG
-                                ((fx_vce.palette_offset[0] >> 8) & 0xFF) << 1 // SPR
+                                (((uint32)fx_vce.palette_offset[0] >> 0) & 0xFF) << 1, // BG
+                                (((uint32)fx_vce.palette_offset[0] >> 8) & 0xFF) << 1 // SPR
                                };
 
     const int width = fx_vce.dot_clock ? 342 : 256; // 342, not 341, to prevent garbage pixels in high dot clock mode.
@@ -2707,11 +2708,7 @@ static void MixVDC(void)
 
 static void MixLayers(void)
 {
-#if PCFX_BPP==16
- uint16 *pXBuf = surface->pixels16;
-#else
  uint32 *pXBuf = surface->pixels;
-#endif
 
     // Now we have to mix everything together... I'm scared, mommy.
     // We have, vdc_linebuffer[0] and bg_linebuffer
@@ -2761,14 +2758,10 @@ static void MixLayers(void)
      coeff_cache_v_back[x] = vce_rendercache.coefficient_mul_table_uv[(vce_rendercache.coefficients[x * 2 + 1] >> 0) & 0xF];
     }
 
-#if PCFX_BPP==16
-    uint16 *target;
-#else
     uint32 *target;
-#endif
     uint32 BPC_Cache = (LAYER_NONE << 28); // Backmost pixel color(cache)
 
-    if(fx_vce.interlaced_count == 2)
+    if(fx_vce.frame_interlaced)
      target = pXBuf + surface->pitch32 * ((fx_vce.raster_counter - 22) * 2 + fx_vce.odd_field);
     else
      target = pXBuf + surface->pitch32 * (fx_vce.raster_counter - 22);
@@ -2948,35 +2941,11 @@ static void MixLayers(void)
     DisplayRect->w = fx_vce.dot_clock ? HighDotClockWidth : 256;
     DisplayRect->x = 0;
 
-    if(fx_vce.interlaced_count == 2)
-    {
-#if PCFX_BPP==16
-     uint16 *target2 = pXBuf + surface->pitch32 * ((fx_vce.raster_counter - 22) * 2 + (fx_vce.odd_field ^ 1));
-#else
-     uint32 *target2 = pXBuf + surface->pitch32 * ((fx_vce.raster_counter - 22) * 2 + (fx_vce.odd_field ^ 1));
-#endif
+	// FIXME
+    if(fx_vce.frame_interlaced)
      LineWidths[(fx_vce.raster_counter - 22) * 2 + fx_vce.odd_field] = *DisplayRect;
-     LineWidths[(fx_vce.raster_counter - 22) * 2 + (fx_vce.odd_field ^ 1)] = fx_vce.LastLineWidths[fx_vce.raster_counter - 22];
-
-#if PCFX_BPP==16
-     memcpy(target2, &fx_vce.LastField[(fx_vce.raster_counter - 22) * 1024], 1024 * sizeof(uint16));
-#else
-     memcpy(target2, &fx_vce.LastField[(fx_vce.raster_counter - 22) * 1024], 1024 * sizeof(uint32));
-#endif
-    }
     else
      LineWidths[fx_vce.raster_counter - 22] = *DisplayRect;
-
-    if(fx_vce.interlaced_count)
-    {
-#if PCFX_BPP==16
-     memcpy(&fx_vce.LastField[(fx_vce.raster_counter - 22) * 1024], target, 1024 * sizeof(uint16));
-#else
-     memcpy(&fx_vce.LastField[(fx_vce.raster_counter - 22) * 1024], target, 1024 * sizeof(uint32));
-#endif
-     fx_vce.LastLineWidths[fx_vce.raster_counter - 22] = *DisplayRect;
-    }
-
 }
 
 static INLINE void RunVDCs(const int master_cycles, uint16 *pixels0, uint16 *pixels1)
@@ -3076,19 +3045,17 @@ static void MDFN_FASTCALL KING_RunGfx(int32 clocks)
 
 			if(!fx_vce.raster_counter)
 			{
+			 bool previous_interlaced = fx_vce.frame_interlaced;
+
 			 fx_vce.frame_interlaced = fx_vce.picture_mode & 2;
 
-			 if(fx_vce.frame_interlaced)
-			 {
+			 if(fx_vce.frame_interlaced && previous_interlaced)
 			  fx_vce.odd_field ^= 1;
-			  if(fx_vce.interlaced_count < 2)
-			   fx_vce.interlaced_count++;
-			 }
-			 else
-			 {
+
+			 if(!fx_vce.frame_interlaced)
 			  fx_vce.odd_field = 0;
-			  fx_vce.interlaced_count = 0;
-			 }
+
+			 PCFX_V810.Exit();
 			}
 
 			if(fx_vce.raster_counter == king->RasterIRQLine && (king->RAINBOWTransferControl & 0x2))
@@ -3105,9 +3072,6 @@ static void MDFN_FASTCALL KING_RunGfx(int32 clocks)
 			  RedoKINGIRQCheck();
 			 }
 			}
-
-			if(!fx_vce.raster_counter)
-			 PCFX_V810.Exit();
 
 			// This -18(and +18) may or may not be correct in regards to how a real PC-FX adjusts the VDC layer horizontal position
 			// versus the KING and RAINBOW layers.
@@ -3142,9 +3106,24 @@ void KING_SetPixelFormat(const MDFN_PixelFormat &format)
  RebuildUVLUT(format);
 }
 
-bool KING_ToggleLayer(int which)
+void KING_SetLayerEnableMask(uint64 mask)
 {
+ uint64 ms = mask;
  // "BG0\0BG1\0BG2\0BG3\0VDC-A BG\0VDC-A SPR\0VDC-B BG\0VDC-B SPR\0RAINBOW\0",
+
+ BGLayerDisable = (~ms) & 0xF;
+ ms >>= 4;
+
+ for(unsigned chip = 0; chip < 2; chip++)
+ {
+  fx_vdc_chips[chip]->SetLayerEnableMask(ms & 0x3);
+  ms >>= 2;
+ }
+
+ RAINBOWLayerDisable = (~ms) & 0x1;
+ ms >>= 1;
+
+#if 0
  if(which < 4)
  {
   BGLayerDisable ^= 1 << which;
@@ -3165,6 +3144,7 @@ bool KING_ToggleLayer(int which)
  }
  else
   return(0);
+#endif
 }
 
 
@@ -3442,6 +3422,7 @@ void KING_SetRegister(const std::string &name, uint32 value)
  else if(name == "ADPCMCTRL")
  {
   king->ADPCMControl = value;
+  SoundBox_SetKINGADPCMControl(king->ADPCMControl);
  }
  else if(name == "ADPCMBM0" || name == "ADPCMBM1")
  {
@@ -3926,9 +3907,9 @@ uint32 FXVDCVCE_GetRegister(const std::string &name, std::string *special)
  return(value);
 }
 
-void KING_SetGraphicsDecode(MDFN_Surface *surface, int line, int which, int xscroll, int yscroll, int pbn)
+void KING_SetGraphicsDecode(MDFN_Surface *decode_surface, int line, int which, int xscroll, int yscroll, int pbn)
 {
- GfxDecode_Buf = surface;
+ GfxDecode_Buf = decode_surface;
  GfxDecode_Line = line;
  GfxDecode_Layer = which;
  GfxDecode_Scroll = yscroll;
@@ -3940,7 +3921,6 @@ void KING_SetGraphicsDecode(MDFN_Surface *surface, int line, int which, int xscr
 
 static void DoGfxDecode(void)
 {
- const uint32 alpha_or = (0xFF << GfxDecode_Buf->format.Ashift);
  int pbn = GfxDecode_PBN;
 
  if(GfxDecode_Layer >= 4 && GfxDecode_Layer <= 7)
@@ -3965,10 +3945,9 @@ static void DoGfxDecode(void)
    palette_ptr += pbn * 16;
 
    for(int x = 0; x < 16; x++) 
-    neo_palette[x] = YUV888_TO_RGB888(palette_ptr[x]) | alpha_or;
+    neo_palette[x] = YUV888_TO_PF(palette_ptr[x], GfxDecode_Buf->format, 0xFF);
   }
 
-  //FXVDC_DoGfxDecode(fx_vdc_chips[(GfxDecode_Layer - 4) / 2], neo_palette, GfxDecode_Buf, GfxDecode_Scroll, (GfxDecode_Layer - 4) & 1);
   fx_vdc_chips[(GfxDecode_Layer - 4) / 2]->DoGfxDecode(GfxDecode_Buf->pixels, neo_palette, GfxDecode_Buf->MakeColor(0, 0, 0, 0xFF), (GfxDecode_Layer - 4) & 1, GfxDecode_Buf->w, GfxDecode_Buf->h, GfxDecode_Scroll);
  }
  else if(GfxDecode_Layer < 4)
@@ -4020,6 +3999,9 @@ static void DoGfxDecode(void)
       int which_tile = (x / 8) + (GfxDecode_Scroll + (y / 8)) * (GfxDecode_Buf->w / 8);
       uint16 cg = king->KRAM[bat_and_cg_page][(cg_offset + (which_tile * 8) + (y & 0x7)) & 0x3FFFF];
 
+      target[x + 0] = target[x + 1] = target[x + 2] = target[x + 3] =
+	target[x + 4] = target[x + 5] = target[x + 6] = target[x + 7] = 0x008080;	// For transparent pixels
+
       DRAWBG8x1_4(target + x, &cg, palette_ptr + pbn, layer_or);
 
       target[x + GfxDecode_Buf->w * 2 + 0] = target[x + GfxDecode_Buf->w * 2 + 1] = target[x + GfxDecode_Buf->w * 2 + 2] = target[x + GfxDecode_Buf->w * 2 + 3] =
@@ -4029,7 +4011,7 @@ static void DoGfxDecode(void)
       target[x + GfxDecode_Buf->w*1 + 4]=target[x + GfxDecode_Buf->w*1 + 5]=target[x + GfxDecode_Buf->w*1 + 6]=target[x + GfxDecode_Buf->w*1 + 7] = which_tile;
      }
      for(int x = 0; x < GfxDecode_Buf->w; x++)
-      target[x] = YUV888_TO_RGB888(target[x]) | alpha_or;
+      target[x] = YUV888_TO_PF(target[x], GfxDecode_Buf->format, 0xFF);
      target += GfxDecode_Buf->w * 3;
     }
    }
@@ -4046,6 +4028,9 @@ static void DoGfxDecode(void)
       int which_tile = (x / 8) + (GfxDecode_Scroll + (y / 8)) * (GfxDecode_Buf->w / 8);
       uint16 *cgptr = &king->KRAM[bat_and_cg_page][(cg_offset + (which_tile * 16) + (y & 0x7) * 2) & 0x3FFFF];
 
+      target[x + 0] = target[x + 1] = target[x + 2] = target[x + 3] =
+        target[x + 4] = target[x + 5] = target[x + 6] = target[x + 7] = 0x008080;       // For transparent pixels
+
       DRAWBG8x1_16(target + x, cgptr, palette_ptr + pbn, layer_or);
 
       target[x + GfxDecode_Buf->w*2 + 0] = target[x + GfxDecode_Buf->w*2 + 1] = target[x + GfxDecode_Buf->w*2 + 2] = target[x + GfxDecode_Buf->w*2 + 3] =
@@ -4055,7 +4040,7 @@ static void DoGfxDecode(void)
       target[x + GfxDecode_Buf->w*1 + 4]=target[x + GfxDecode_Buf->w*1 + 5]=target[x + GfxDecode_Buf->w*1 + 6]=target[x + GfxDecode_Buf->w*1 + 7] = which_tile;
      }
      for(int x = 0; x < GfxDecode_Buf->w; x++)
-      target[x] = YUV888_TO_RGB888(target[x]) | alpha_or;
+      target[x] = YUV888_TO_PF(target[x], GfxDecode_Buf->format, 0xFF);
      target += GfxDecode_Buf->w * 3;
     }
    }
@@ -4070,6 +4055,9 @@ static void DoGfxDecode(void)
       int which_tile = (x / 8) + (GfxDecode_Scroll + (y / 8)) * (GfxDecode_Buf->w / 8);
       uint16 *cgptr = &king->KRAM[bat_and_cg_page][(cg_offset + (which_tile * 32) + (y & 0x7) * 4) & 0x3FFFF];
 
+      target[x + 0] = target[x + 1] = target[x + 2] = target[x + 3] =
+        target[x + 4] = target[x + 5] = target[x + 6] = target[x + 7] = 0x008080;       // For transparent pixels
+
       DRAWBG8x1_256(target + x, cgptr, palette_ptr, layer_or);
 
       target[x + GfxDecode_Buf->w*2 + 0] = target[x + GfxDecode_Buf->w*2 + 1] = target[x + GfxDecode_Buf->w*2 + 2] = target[x + GfxDecode_Buf->w*2 + 3] =
@@ -4080,7 +4068,7 @@ static void DoGfxDecode(void)
      }
 
      for(int x = 0; x < GfxDecode_Buf->w; x++)
-      target[x] = YUV888_TO_RGB888(target[x]) | alpha_or;
+      target[x] = YUV888_TO_PF(target[x], GfxDecode_Buf->format, 0xFF);
 
      target += GfxDecode_Buf->w * 3;
     }
@@ -4095,11 +4083,14 @@ static void DoGfxDecode(void)
       int which_tile = (x / 8) + (GfxDecode_Scroll + (y / 8)) * (GfxDecode_Buf->w / 8);
       uint16 *cgptr = &king->KRAM[bat_and_cg_page][(cg_offset + (which_tile * 64) + (y & 0x7) * 8) & 0x3FFFF];
 
+      target[x + 0] = target[x + 1] = target[x + 2] = target[x + 3] =
+        target[x + 4] = target[x + 5] = target[x + 6] = target[x + 7] = 0x008080;       // For transparent pixels
+
       DRAWBG8x1_64K(target + x, cgptr, palette_ptr, layer_or);
      }
 
      for(int x = 0; x < GfxDecode_Buf->w; x++)
-      target[x] = YUV888_TO_RGB888(target[x]) | alpha_or;
+      target[x] = YUV888_TO_PF(target[x], GfxDecode_Buf->format, 0xFF);
 
      target += GfxDecode_Buf->w * 3;
     }
@@ -4113,11 +4104,14 @@ static void DoGfxDecode(void)
       int which_tile = (x / 8) + (GfxDecode_Scroll + (y / 8)) * (GfxDecode_Buf->w / 8);
       uint16 *cgptr = &king->KRAM[bat_and_cg_page][(cg_offset + (which_tile * 64) + (y & 0x7) * 8) & 0x3FFFF];
 
+      target[x + 0] = target[x + 1] = target[x + 2] = target[x + 3] =
+        target[x + 4] = target[x + 5] = target[x + 6] = target[x + 7] = 0x008080;       // For transparent pixels
+
       DRAWBG8x1_16M(target + x, cgptr, palette_ptr, layer_or);
      }
 
      for(int x = 0; x < GfxDecode_Buf->w; x++)
-      target[x] = YUV888_TO_RGB888(target[x]) | alpha_or;
+      target[x] = YUV888_TO_PF(target[x], GfxDecode_Buf->format, 0xFF);
 
      target += GfxDecode_Buf->w * 3;
     }
@@ -4126,7 +4120,7 @@ static void DoGfxDecode(void)
   }
  }
  else
-  memset(GfxDecode_Buf, 0, GfxDecode_Buf->w * GfxDecode_Buf->h * sizeof(uint32) * 3);
+  memset(GfxDecode_Buf->pixels, 0, GfxDecode_Buf->w * GfxDecode_Buf->h * sizeof(uint32) * 3);
 }
 
 #endif
