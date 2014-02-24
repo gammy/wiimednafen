@@ -22,10 +22,6 @@
 #include "../general.h"
 #include "../md5.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 namespace MDFN_IEN_SMS
 {
 
@@ -95,12 +91,8 @@ static const char *sms_mapper_string_table[] =
 
 bool SMS_CartInit(const uint8 *data, uint32 size)
 {
-#ifdef MEM2
- if(!(rom = (uint8*) Mem2ManagerAlloc(size, _("Cart ROM"))))
-#else
  if(!(rom = (uint8*) MDFN_malloc(size, _("Cart ROM"))))
-#endif
-   return(0);
+  return(0);
 
  pages = size / 0x2000;
  page_mask8 = round_up_pow2(pages) - 1;
@@ -134,18 +126,9 @@ bool SMS_CartInit(const uint8 *data, uint32 size)
 
  if(mapper == MAPPER_CASTLE)
  {
-#ifdef MEM2
-  CastleRAM = (uint8 *)Mem2ManagerCalloc(1, 8192, "Castle RAM");
-#else
-  CastleRAM = (uint8 *)MDFN_calloc(1, 8192, "Castle RAM");
-#endif
+  CastleRAM = (uint8 *)calloc(1, 8192);
  }
-
-#ifdef MEM2
- sram = (uint8 *)Mem2ManagerCalloc(1, 0x8000, "sram");
-#else
- sram = (uint8 *)MDFN_calloc(1, 0x8000, "sram");
-#endif
+ sram = (uint8 *)calloc(1, 0x8000);
 
  MDFN_printf(_("ROM:       %dKiB\n"), (size + 1023) / 1024);
  MDFN_printf(_("ROM CRC32: 0x%08x\n"), crc);
@@ -184,25 +167,19 @@ void SMS_CartClose(void)
 
  if(rom)
  {
-#ifndef MEM2
-  MDFN_free(rom);
-#endif
+  free(rom);
   rom = NULL;
  }
 
  if(CastleRAM)
  {
-#ifndef MEM2
-  MDFN_free(CastleRAM);
-#endif
+  free(CastleRAM);
   CastleRAM = NULL;
  }
 
  if(sram)
  {
-#ifndef MEM2
-  MDFN_free(sram);
-#endif
+  free(sram);
   sram = NULL;
  }
 }

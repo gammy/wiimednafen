@@ -19,16 +19,10 @@
 #include "shared.h"
 #include "../mempatcher.h"
 
-#include "../settings-driver.h"
-
-#include "Emulators.h"
-
-#ifdef WII_NETTRACE
+#ifdef WII_NETTRACE`
 #include <network.h>
 #include "net_print.h"  
 #endif
-
-#include "romdb.h"
 
 namespace MDFN_IEN_SMS
 {
@@ -223,7 +217,6 @@ static int LoadCommon(const char *name, MDFNFILE *fp)
   MDFNI_SetSetting("sms.territory",
     emuRegistry.MasterSystemEmu.getConsoleRegionString());
 #endif
-
  sms.territory   = MDFN_GetSettingI("sms.territory");
  sms.use_fm      = FALSE;
 
@@ -247,7 +240,7 @@ static int LoadCommon(const char *name, MDFNFILE *fp)
 
  sms_init();
  pio_init();
- vdp_init();
+ vdp_init(IS_SMS && sms.territory == TERRITORY_DOMESTIC);
  render_init();
 
  MDFNGameInfo->GameSetMD5Valid = FALSE;
@@ -310,16 +303,15 @@ static bool TestMagicSMS(const char *name, MDFNFILE *fp)
  int system = GetSystemFromDB( fp );
 #endif
 
- if(strcasecmp(fp->ext, "sms") && 
-    strcasecmp(fp->ext, "sg") && 
-    strcasecmp(fp->ext, "sc") 
+ if(strcasecmp(fp->ext, "sms") && strcasecmp(fp->ext, "sg") && strcasecmp(fp->ext, "sc")
 #ifdef WII
-    && system != CONSOLE_SMS    
+    && system != CONSOLE_SMS
 #endif
- )
+    
+    )
   return(FALSE);
 
- return TRUE;
+ return(TRUE);
 }
 
 static bool TestMagicGG(const char *name, MDFNFILE *fp)
@@ -332,11 +324,12 @@ static bool TestMagicGG(const char *name, MDFNFILE *fp)
 #ifdef WII
     && system != CONSOLE_GG    
 #endif   
- )
+  )
   return(FALSE);
 
- return TRUE;
+ return(TRUE);
 }
+
 
 static int LoadSMS(const char *name, MDFNFILE *fp)
 {
@@ -382,6 +375,7 @@ static InputDeviceInfoStruct GGInputDeviceInfo[] =
   "gamepad",
   "Gamepad",
   NULL,
+  NULL,
   sizeof(GGGamepadIDII) / sizeof(InputDeviceInputInfoStruct),
   GGGamepadIDII,
  }
@@ -393,6 +387,7 @@ static InputDeviceInfoStruct SMSInputDeviceInfo[] =
   "gamepad",
   "Gamepad",
   NULL,
+  NULL,
   sizeof(SMSGamepadIDII) / sizeof(InputDeviceInputInfoStruct),
   SMSGamepadIDII,
  }
@@ -400,13 +395,13 @@ static InputDeviceInfoStruct SMSInputDeviceInfo[] =
 
 static const InputPortInfoStruct GGPortInfo[] =
 {
- { 0, "builtin", "Built-In", sizeof(GGInputDeviceInfo) / sizeof(InputDeviceInfoStruct), GGInputDeviceInfo, "gamepad" },
+ { "builtin", "Built-In", sizeof(GGInputDeviceInfo) / sizeof(InputDeviceInfoStruct), GGInputDeviceInfo, "gamepad" },
 };
 
 static const InputPortInfoStruct SMSPortInfo[] =
 {
- { 0, "port1", "Port 1", sizeof(SMSInputDeviceInfo) / sizeof(InputDeviceInfoStruct), SMSInputDeviceInfo, "gamepad" },
- { 0, "port2", "Port 2", sizeof(SMSInputDeviceInfo) / sizeof(InputDeviceInfoStruct), SMSInputDeviceInfo, "gamepad" }
+ { "port1", "Port 1", sizeof(SMSInputDeviceInfo) / sizeof(InputDeviceInfoStruct), SMSInputDeviceInfo, "gamepad" },
+ { "port2", "Port 2", sizeof(SMSInputDeviceInfo) / sizeof(InputDeviceInfoStruct), SMSInputDeviceInfo, "gamepad" }
 };
 
 static InputInfoStruct GGInputInfo =
@@ -435,11 +430,6 @@ static void DoSimpleCommand(int cmd)
 			 system_reset();
 			break;
  }
-}
-
-static bool ToggleLayer(int which)
-{
- return(TRUE);
 }
 
 static MDFNSetting_EnumList Territory_List[] =
@@ -487,11 +477,14 @@ MDFNGI EmulatedSMS =
  NULL,
  NULL,
  CloseGame,
- ToggleLayer,
- "Hi\0Ho\0Mo\0", //"Background Scroll\0Foreground Scroll\0Sprites\0",
+ NULL, //ToggleLayer,
+ NULL, //"Hi\0Ho\0Mo\0", //"Background Scroll\0Foreground Scroll\0Sprites\0",
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  SetInput,
@@ -517,7 +510,7 @@ MDFNGI EmulatedSMS =
 MDFNGI EmulatedGG =
 {
  "gg",
- "Game Gear",
+ "Sega Game Gear",
  GGKnownExtensions,
  MODPRIO_INTERNAL_HIGH,
  NULL,
@@ -527,11 +520,14 @@ MDFNGI EmulatedGG =
  NULL,
  NULL,
  CloseGame,
- ToggleLayer,
- "Hi\0Ho\0Mo\0", //"Background Scroll\0Foreground Scroll\0Sprites\0",
+ NULL, //ToggleLayer,
+ NULL, //"Hi\0Ho\0Mo\0", //"Background Scroll\0Foreground Scroll\0Sprites\0",
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  SetInput,
