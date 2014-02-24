@@ -895,11 +895,13 @@ void CMikie::Poke(uint32 addr,uint8 data)
 			TRACE_MIKIE2("Poke(SYSCTL1 ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
 			if(!(data&0x02))
 			{
+#ifndef WII
 				C6502_REGS regs;
 				mSystem.GetRegs(regs);
 				MDFN_printf("Runtime Alert - System Halted\nCMikie::Poke(SYSCTL1) - Lynx power down occured at PC=$%04x.\nResetting system.",regs.PC);
 				mSystem.Reset();
 				gSystemHalt=TRUE;
+#endif
 			}
 			mSystem.CartAddressStrobe((data&0x01)?TRUE:FALSE);
 			break;
