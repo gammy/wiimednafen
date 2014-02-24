@@ -69,17 +69,17 @@ static uint16 COMM_FLAGS;
 static uint8 COMM_CMD[8 * 2];
 static uint8 COMM_STATUS[8 * 2];
 
-#define DEBUGMAIN(format, ...) { printf("MAIN "format, ## __VA_ARGS__); }
-#define DEBUGSUB(format, ...) { printf("SUB "format, ## __VA_ARGS__); }
+#define DEBUGMAIN(format, ...) { printf("MAIN " format, ## __VA_ARGS__); }
+#define DEBUGSUB(format, ...) { printf("SUB " format, ## __VA_ARGS__); }
 
-#define UNDEFMAIN(format, ...) { printf("MAIN Undefined "format, ## __VA_ARGS__); }
-#define UNDEFSUB(format, ...) { printf("SUB Undefined "format, ## __VA_ARGS__); }
+#define UNDEFMAIN(format, ...) { printf("MAIN Undefined " format, ## __VA_ARGS__); }
+#define UNDEFSUB(format, ...) { printf("SUB Undefined " format, ## __VA_ARGS__); }
 
 //#if 0
-#define DEBUGMAIN(format, ...) { }
+//#define DEBUGMAIN(format, ...) { }
 //#define DEBUGSUB(format, ...)
 
-#define UNDEFMAIN(format, ...) { }
+//#define UNDEFMAIN(format, ...) { }
 //#define UNDEFSUB(format, ...)
 //#endif
 
@@ -185,7 +185,7 @@ static void MDCD_MainWrite16(uint32 A, uint16 V)
  A &= 0xFFFFFF;
 
  if(A >= 0x40000)
-  /*DEBUGMAIN("Write16: %08x %04x\n", A, V)*/;
+  DEBUGMAIN("Write16: %08x %04x\n", A, V);
 
  if(A >= 0x20000 && A <= 0x3FFFF) // Sub68k program RAM(banked)
  {
@@ -555,7 +555,7 @@ static void MDCD_SubWrite16(uint32 A, uint16 V)
  assert(!(A & 1));
 
  if(A >= 0x80000)
-  /*DEBUGSUB("Write16: %08x %04x\n", A, V)*/;
+  DEBUGSUB("Write16: %08x %04x\n", A, V);
 
  if(A <= 0x7FFFF)               // Program RAM
  {
@@ -837,7 +837,9 @@ void MDCD_Run(int32 md_master_cycles)
   else
   {
    //printf("Yay: %08x\n", C68k_Get_PC(&Sub68K));
-   temp_cycles = C68k_Exec(&Sub68K);
+   Sub68K.timestamp = 0;
+   C68k_Exec(&Sub68K);
+   temp_cycles = Sub68K.timestamp;
   }
   MDCD_Timer_Run(temp_cycles);
   MDCD_PCM_Run(temp_cycles);
@@ -937,13 +939,13 @@ bool MDCD_Init(void)
  return(TRUE);
 }
 
-static int32 CheckValidTrack(uint8 *sector_buffer)
+static int32 CheckValidTrack(CDIF *cdiface, uint8 *sector_buffer)
 {
- CD_TOC toc;
+ CDUtility::TOC toc;
  bool DTFound = 0;
  int32 track;
 
- CDIF_ReadTOC(&toc);
+ cdiface->ReadTOC(&toc);
 
  for(track = toc.first_track; track <= toc.last_track; track++)
  {
@@ -956,7 +958,7 @@ static int32 CheckValidTrack(uint8 *sector_buffer)
 
  if(DTFound) // Only add the MD5 hash if we were able to find a data track.
  {
-  if(CDIF_ReadSector(sector_buffer, toc.tracks[track].lba, 1))
+  if(cdiface->ReadSector(sector_buffer, toc.tracks[track].lba, 1))
   {
    if(!memcmp(sector_buffer + 0x100, "SEGA MEGA DRIVE", 15) || !memcmp(sector_buffer + 0x100, "SEGA GENESIS", 12))
     return(track);
@@ -966,18 +968,18 @@ static int32 CheckValidTrack(uint8 *sector_buffer)
  return(0);
 }
 
-bool MDCD_TestMagic(void)
+bool MDCD_TestMagic(std::vector<CDIF *> *CDInterfaces)
 {
  uint8 sector_buffer[2048];
 
- return((bool)CheckValidTrack(sector_buffer));
+ return((bool)CheckValidTrack((*CDInterfaces)[0], sector_buffer));
 }
 
-bool MDCD_Load(md_game_info *ginfo)
+bool MDCD_Load(std::vector<CDIF *> *CDInterfaces, md_game_info *ginfo)
 {
  uint8 sector_buffer[2048];
 
- if(!CheckValidTrack(sector_buffer))
+ if(!CheckValidTrack((*CDInterfaces)[0], sector_buffer))
   return(FALSE);
 
  MD_ReadSegaHeader(sector_buffer + 0x100, ginfo);
@@ -995,10 +997,13 @@ bool MDCD_Load(md_game_info *ginfo)
 }
 
  
-void MDCD_Reset(void)
+void MDCD_Reset(bool poweron)
 {
- memset(PRAM, 0, 0x80000);
- memset(WordRAM, 0, 0x40000);
+ if(poweron)
+ {
+  memset(PRAM, 0, 0x80000);
+  memset(WordRAM, 0, 0x40000);
+ }
 
  C68k_Reset(&Sub68K);
  MDCD_InterruptReset();

@@ -18,7 +18,7 @@
  Arcade Card emulation based on information provided by Ki and David Shadoff
 */
 
-#include "../../mednafen.h"
+#include "mednafen/mednafen.h"
 
 //#include "pce.h"
 //#include "huc.h"
@@ -181,9 +181,10 @@ void ArcadeCard::Write(uint32 A, uint8 V)
               port->offset |= V << 0;
               if((port->control & 0x60) == 0x20)
               {
-               port->base = (port->base + port->offset) & 0xFFFFFF;
                if(port->control & 0x08)
                 port->base += 0xFF0000;
+
+               port->base = (port->base + port->offset) & 0xFFFFFF;
               }
               break;
 
@@ -191,9 +192,10 @@ void ArcadeCard::Write(uint32 A, uint8 V)
               port->offset |= V << 8;
               if((port->control & 0x60) == 0x40)
               {
+               if(port->control & 0x08)
+                port->base += 0xFF0000;
+
                port->base = (port->base + port->offset) & 0xFFFFFF;
-	       if(port->control & 0x08)
-	        port->base += 0xFF0000;
               }
               break;
 
@@ -210,9 +212,10 @@ void ArcadeCard::Write(uint32 A, uint8 V)
 
    case 0x0A: if((port->control & 0x60) == 0x60)
               {
-               port->base = (port->base + port->offset) & 0xFFFFFF;
                if(port->control & 0x08)
                 port->base += 0xFF0000;
+
+               port->base = (port->base + port->offset) & 0xFFFFFF;
               }
               break;
   }

@@ -418,7 +418,6 @@ static u32 current_eam2;
 static u32 current_reg2;
 static u32 current_size;
 static u32 current_cycle;
-static u32 current_io_sav;
 
 static char current_cond_char[128];
 
@@ -498,7 +497,7 @@ static u32 prepare_generate()
 {
     char filename[32];
 
-    sprintf(filename, "usb:/c68k_op%.1X.inc", (current_op->op_base >> 12) & 0xF);
+    sprintf(filename, "c68k_op%.1X.inc", (current_op->op_base >> 12) & 0xF);
     if (opcode_file != NULL)
     {
         fclose(opcode_file);
@@ -636,7 +635,6 @@ static void gen_opjumptable(u32 op)
 
 static void start_op(u32 op, int v)
 {
-    current_io_sav = 0;
     current_cycle = 0;
 
     wf_op("\n// %s\n", current_op->op_name);
@@ -654,81 +652,106 @@ static void start_op(u32 op, int v)
 
 static void add_CCnt(u32 cycle)
 {
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
-    wf_op("\tCCnt -= %d;\n", cycle);
+    wf_op("\ttimestamp += %d;\n", cycle);
 }
 
 static void adds_CCnt(char *str)
 {
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
-    wf_op("\tCCnt -= %s;\n", str);
-}
-
-static void sub_CCnt(u32 cycle)
-{
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
-    wf_op("\tCCnt += %d;\n", cycle);
-}
-
-static void subs_CCnt(char *str)
-{
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
-    wf_op("\tCCnt += %s;\n", str);
+    wf_op("\ttimestamp += %s;\n", str);
 }
 
 static void quick_fterminate_op(u32 cycle)
 {
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
-    wf_op("\tCCnt -= %d;\n", current_cycle + cycle);
+    wf_op("\ttimestamp += %d;\n", current_cycle + cycle);
     wf_op("\tgoto C68k_Exec_End;\n");
 }
 
 static void fterminate_op(u32 cycle)
 {
     wf_op("}\n");
-    if (current_io_sav) wf_op("POST_IO\n");
-    current_io_sav = 0;
-    wf_op("CCnt -= %d;\n", current_cycle + cycle);
+    wf_op("timestamp += %d;\n", current_cycle + cycle);
     wf_op("goto C68k_Exec_End;\n");
 }
 
 static void quick_terminate_op(u32 cycle)
 {
-    if (current_io_sav) wf_op("\tPOST_IO\n");
-    current_io_sav = 0;
     wf_op("\tRET(%d)\n", current_cycle + cycle);
 }
 
 static void terminate_op(u32 cycle)
 {
-    if (current_io_sav) wf_op("\tPOST_IO\n");
     wf_op("}\n");
-    current_io_sav = 0;
     wf_op("RET(%d)\n", current_cycle + cycle);
 }
+#include <assert.h>
 
-static void do_pre_io(void)
+static void IO_CTHULHU(char *test_string) //int evil_babies)
 {
-    if (!current_io_sav) fprintf(opcode_file, "\tPRE_IO\n");
-    current_io_sav = 1;
+ int numb = 0;
+ int evil_babies = 0;
+ char *rs;
+
+ if((rs = strstr(test_string, "_BYTE_")))
+ {
+  evil_babies = 4;
+  numb = 8;
+ }
+ else if((rs = strstr(test_string, "_WORD_")))
+ {
+  evil_babies = 4;
+  numb = 16;
+ }
+ else if((rs = strstr(test_string, "_LONG_")))
+ {
+  evil_babies = 8;
+  numb = 32;
+ }
+
+ if(!evil_babies)
+ {
+  //printf("%d %s\n", evil_babies, test_string);
+  return;
+ }
+
+ if(current_cycle < evil_babies)
+ {
+  //puts("Too many clowns!");
+  return;
+ }
+
+ // assert(current_cycle >= 4);
+ //wf_op("\tCCnt -= %d;\n", current_cycle - 2);
+ //current_cycle = 2;
+
+ rs[3] = 'a';
+ rs[4] = 't';
+ //sprintf(&rs[1], "NT%02d", numb);
+
+ current_cycle -= evil_babies;
+ if(current_cycle)
+ {
+  wf_op("\ttimestamp += %d;\n", current_cycle);
+  current_cycle = 0;
+ }
 }
 
 static void mem_op(char* fmt, ...)
 {
+	static char lovelykoala[65536];
 	va_list args;
 
     if (opcode_file == NULL) return;
 
-    do_pre_io();
+//	va_start(args, fmt);
+//	vfprintf(opcode_file, fmt, args);
+//	va_end(args);
 
-	va_start(args, fmt);
-	vfprintf(opcode_file, fmt, args);
-	va_end(args);
+    va_start(args, fmt);
+    vsnprintf(lovelykoala, sizeof(lovelykoala), fmt, args);
+    va_end(args);
+
+    IO_CTHULHU(lovelykoala);
+    fwrite(lovelykoala, strlen(lovelykoala), 1, opcode_file);
 }
 
 // flag emitter function
@@ -1293,7 +1316,7 @@ static void _ea_read_(u32 ea, u32 rsft, char dest[4])
             {
                 wf_op("\t// can't read byte from Ax registers !\n");
                 wf_op("\tCPU->Status |= C68K_FAULTED;\n");
-                wf_op("\tCCnt = 0;\n");
+                //wf_op("\tCCnt = 0;\n");
                 wf_op("\tgoto C68k_Exec_Really_End;\n");
             }
             else wf_op("\t%s = (%s)CPU->A[(Opcode >> %d) & 7];\n", dest, szc, rsft);
@@ -1385,7 +1408,7 @@ static void _ea_read_sx_(u32 ea, u32 rsft, char dest[4])
             {
                 wf_op("\t// can't read byte from Ax registers !\n");
                 wf_op("\tCPU->Status |= C68K_FAULTED;\n");
-                wf_op("\tCCnt = 0;\n");
+                //wf_op("\tCCnt = 0;\n");
                 wf_op("\tgoto C68k_Exec_Really_End;\n");
             }
             else wf_op("\t%s = (s32)(%s)CPU->A[(Opcode >> %d) & 7];\n", dest, szcs, rsft);
@@ -1581,7 +1604,7 @@ static void gen_privilege_exception(char *pre)
     adds_CCnt("c68k_exception_cycle_table[res]");
 
     // we will do some mem/io access
-    do_pre_io();
+    // do_pre_io();
 
     // push PC and SR
     mem_op("%sPUSH_32_F(PC)\n", pre);
@@ -1610,7 +1633,7 @@ static void gen_exception(char *pre, char* exception)
     adds_CCnt("c68k_exception_cycle_table[res]");
 
     // we will do some mem/io access
-    do_pre_io();
+    // do_pre_io();
 
     // push PC and SR
     mem_op("%sPUSH_32_F(PC)\n", pre);

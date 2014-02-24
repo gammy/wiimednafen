@@ -14,13 +14,8 @@ class MDVDP;
 
 /* Global variables */
 extern uint8 *cart_rom; //[0x400000];
-#ifndef WII
 extern uint8 work_ram[0x10000];
 extern uint8 zram[0x2000];
-#else
-extern uint8 *work_ram;
-extern uint8 *zram;
-#endif
 extern uint8 zbusreq;
 extern uint8 zbusack;
 extern uint8 zreset;
@@ -32,7 +27,7 @@ extern MDVDP MainVDP;
 
 /* Function prototypes */
 void gen_init(void);
-void gen_reset(void);
+void gen_reset(bool poweron);
 void gen_shutdown(void);
 int gen_busack_r(void);
 void gen_busreq_w(int state);
@@ -40,10 +35,6 @@ void gen_reset_w(int state);
 void gen_bank_w(int state);
 int z80_irq_callback(int param);
 void m68k_irq_ack_callback(int int_level);
-
-#ifdef MEM2
-void gen_mem2_alloc(void);
-#endif
 
 }
 

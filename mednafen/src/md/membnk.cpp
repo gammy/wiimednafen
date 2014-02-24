@@ -162,6 +162,7 @@ void z80bank_vdp_w(int address, int data)
             case 0x01:
             case 0x02:
             case 0x03:
+		puts("MOO2");
                 MainVDP.vdp_data_w(data << 8 | data);
                 return;
 

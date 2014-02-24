@@ -259,7 +259,7 @@ case 0x6201:
 	if (CPU->flag_notZ && (!(CPU->flag_C & 0x100)))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -524,7 +524,7 @@ case 0x6301:
 	if ((!CPU->flag_notZ) || (CPU->flag_C & 0x100))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -789,7 +789,7 @@ case 0x6401:
 	if (!(CPU->flag_C & 0x100))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -1054,7 +1054,7 @@ case 0x6501:
 	if (CPU->flag_C & 0x100)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -1319,7 +1319,7 @@ case 0x6601:
 	if (CPU->flag_notZ)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -1584,7 +1584,7 @@ case 0x6701:
 	if (!CPU->flag_notZ)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -1849,7 +1849,7 @@ case 0x6801:
 	if (!(CPU->flag_V & 0x80))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -2114,7 +2114,7 @@ case 0x6901:
 	if (CPU->flag_V & 0x80)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -2379,7 +2379,7 @@ case 0x6A01:
 	if (!(CPU->flag_N & 0x80))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -2644,7 +2644,7 @@ case 0x6B01:
 	if (CPU->flag_N & 0x80)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -2909,7 +2909,7 @@ case 0x6C01:
 	if (!((CPU->flag_N ^ CPU->flag_V) & 0x80))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -3174,7 +3174,7 @@ case 0x6D01:
 	if ((CPU->flag_N ^ CPU->flag_V) & 0x80)
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -3439,7 +3439,7 @@ case 0x6E01:
 	if (CPU->flag_notZ && (!((CPU->flag_N ^ CPU->flag_V) & 0x80)))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -3704,7 +3704,7 @@ case 0x6F01:
 	if ((!CPU->flag_notZ) || ((CPU->flag_N ^ CPU->flag_V) & 0x80))
 	{
 		PC += (s32)(s8)Opcode;
-	CCnt -= 2;
+	timestamp += 2;
 	}
 }
 RET(8)
@@ -4417,10 +4417,8 @@ case 0x61FF:
 // BSR
 case 0x6101:
 {
-	PRE_IO
 	PUSH_32_F(PC)
 	PC += (s32)(s8)Opcode;
-	POST_IO
 }
 RET(18)
 
@@ -4429,10 +4427,8 @@ case 0x6100:
 {
 	u32 res;
 	res = (s32)(s16)FETCH_WORD;
-	PRE_IO
 	PUSH_32_F(PC + 2)
 	PC += (s32) res;
 	SET_PC(PC);
-	POST_IO
 }
 RET(18)

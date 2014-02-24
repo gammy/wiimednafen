@@ -920,7 +920,7 @@ static void
 
 }
 
-floatmain( int argc, char **argv )
+main( int argc, char **argv )
 {
     char *argPtr;
     flag functionArgument;

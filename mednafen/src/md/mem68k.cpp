@@ -41,19 +41,14 @@ unsigned int m68k_read_bus_16(unsigned int address)
     }
 }
 
-void m68k_unused_w(unsigned int address, unsigned int value)
-{
- printf("Unused %08X = %08X\n", address, value);
-}
-
 void m68k_unused_8_w(unsigned int address, unsigned int value)
 {
- printf("Unused %08X = %02X (%08X)\n", address, value);
+ printf("Unused %08X = %02X\n", address, value);
 }
 
 void m68k_unused_16_w(unsigned int address, unsigned int value)
 {
- printf("Unused %08X = %04X (%08X)\n", address, value);
+ printf("Unused %08X = %04X\n", address, value);
 }
 
 /*
@@ -90,6 +85,8 @@ unsigned int m68k_lockup_r_16(unsigned int address)
 
 uint8 MD_ReadMemory8(uint32 address)
 {
+ MD_UpdateSubStuff();
+
  address &= 0xFFFFFF;
 
  //printf("Read8: %08x\n", address);
@@ -247,6 +244,8 @@ uint8 MD_ReadMemory8(uint32 address)
 
 uint16 MD_ReadMemory16(uint32 address)
 {
+ MD_UpdateSubStuff();
+
  if(address & 1)
  {
   // TODO: Generate 68K exception(and remove address &= ~1)
@@ -382,6 +381,8 @@ uint16 MD_ReadMemory16(uint32 address)
 
 void MD_WriteMemory8(uint32 address, uint8 value)
 {
+ MD_UpdateSubStuff();
+
  address &= 0xFFFFFF;
 
  //printf("Write8: %08x %02x\n", address & 0xFFFFFF, value);
@@ -560,6 +561,8 @@ void MD_WriteMemory8(uint32 address, uint8 value)
 
 void MD_WriteMemory16(uint32 address, uint16 value) 
 {
+ MD_UpdateSubStuff();
+
  if(address & 1)
  {
   // TODO: Generate 68K exception(and remove address &= ~1)
@@ -608,6 +611,7 @@ void MD_WriteMemory16(uint32 address, uint16 value)
                         switch(address & 0x7F00)
                         {
                             case 0x6000: /* Bank register */
+                                        printf("Bank16: %04x\n", value);
                                 gen_bank_w((value >> 8) & 1);
                                 return;
 
@@ -616,7 +620,7 @@ void MD_WriteMemory16(uint32 address, uint16 value)
                                 return;
 
                              default: /* Unused */
-                                m68k_unused_8_w(address, value);
+                                m68k_unused_16_w(address, value);
                                 return;
                         }
                         break;

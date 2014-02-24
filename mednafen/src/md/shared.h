@@ -2,6 +2,7 @@
 #define _SHARED_H_
 
 #include "../mednafen.h"
+#include "../masmem.h"
 
 #include <stdio.h>
 #include <math.h>

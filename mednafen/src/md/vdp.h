@@ -47,16 +47,12 @@ class MDVDP
  public:
 
  /* Function prototypes */
- MDVDP(void);
- ~MDVDP();
+ MDVDP(void) MDFN_COLD;
+ ~MDVDP() MDFN_COLD;
 
  void SetSettings(bool PAL, bool PAL_reported, bool auto_aspect);
 
-#ifdef MEM2
- void Mem2Alloc(void);
-#endif
-
- void Reset(void);
+ void Reset(void) MDFN_COLD;
  void vdp_ctrl_w(uint16 data);
  uint16 vdp_ctrl_r(void);
  void vdp_data_w(uint16 data);
@@ -72,7 +68,7 @@ class MDVDP
  void SetPixelFormat(const MDFN_PixelFormat &format); //int rs, int gs, int bs);
  void SetSurface(EmulateSpecStruct *espec);	//MDFN_Surface *surface, MDFN_Rect *rect);
 
- bool ToggleLayer(int which);
+ void SetLayerEnableMask(uint64 mask);
 
  int StateAction(StateMem *sm, int load, int data_only);
  void ResetTS(void);
@@ -130,19 +126,11 @@ class MDVDP
  };
 
 
-#ifndef MEM2
  uint8 sat[0x400];               /* Internal copy of sprite attribute table */
  uint8 vram[0x10000];            /* Video RAM (64Kx8) */
  uint16 cram[0x40];              /* On-chip color RAM (64x9) */
  uint16 vsram[0x40];             /* On-chip vertical scroll RAM (40x11) */
  uint8 reg[0x20];                /* Internal VDP registers (23x8) */
-#else
- uint8 *sat;               /* Internal copy of sprite attribute table */
- uint8 *vram;            /* Video RAM (64Kx8) */
- uint16 *cram;              /* On-chip color RAM (64x9) */
- uint16 *vsram;             /* On-chip vertical scroll RAM (40x11) */
- uint8 *reg;                /* Internal VDP registers (23x8) */
-#endif
 
  uint16 addr;                    /* Address register */
  uint16 addr_latch;              /* Latched A15, A14 of address */
@@ -163,16 +151,10 @@ class MDVDP
  uint16 DMALength;
 
  uint8 border;                   /* Border color index */
-#ifndef MEM2
  uint8 bg_name_dirty[0x800];     /* 1= This pattern is dirty */
  uint16 bg_name_list[0x800];     /* List of modified pattern indices */
- uint32 bg_pattern_cache[0x80000 / sizeof(uint32)];/* Cached and flipped patterns */
-#else
- uint8 *bg_name_dirty;     /* 1= This pattern is dirty */
- uint16 *bg_name_list;     /* List of modified pattern indices */
- uint32 *bg_pattern_cache;/* Cached and flipped patterns */
-#endif
  uint16 bg_list_index;           /* # of modified patterns in list */
+ uint32 bg_pattern_cache[0x80000 / sizeof(uint32)];/* Cached and flipped patterns */
  uint8 playfield_shift;          /* Width of planes A, B (in bits) */
  uint8 playfield_col_mask;       /* Vertical scroll mask */
  uint16 playfield_row_mask;      /* Horizontal scroll mask */
@@ -191,6 +173,8 @@ class MDVDP
  int32 vdp_last_ts;
  int32 vdp_line_phase;
  int32 vdp_hcounter_start_ts;
+
+ int32 fifo_simu_count;
 
  int32 scanline;
  bool is_pal, report_pal;
@@ -217,29 +201,15 @@ class MDVDP
  /* Sprite line buffer data */
  uint8 object_index_count;
 
-#ifndef MEM2
  object_info_t object_info[20];
-#else
- object_info_t *object_info;
-#endif
 
  /* Pixel look-up tables and table base address */
  uint8 *lut[5];
  uint8 *lut_base;
 
  /* 32-bit pixel remapping data */
-#if MEM2
- uint16 *pixel_32;
- uint16 *pixel_32_lut[3];
-#else
-#if MD_BPP==16
- uint16 pixel_32[0x100];
- uint16 pixel_32_lut[3][0x200];
-#else
  uint32 pixel_32[0x100];
  uint32 pixel_32_lut[3][0x200];
-#endif
-#endif
 
  uint32 UserLE; // User layer enable;
 
@@ -255,21 +225,18 @@ class MDVDP
  void update_bg_pattern_cache(void);
  void get_hscroll(int line, uint16 *scrolla, uint16 *scrollb);
  void window_clip(int line);
- int make_lut_bg(int bx, int ax);
- int make_lut_obj(int bx, int sx);
- int make_lut_bg_ste(int bx, int ax);
- int make_lut_obj_ste(int bx, int sx);
- int make_lut_bgobj_ste(int bx, int sx);
-#if MD_BPP==16
- void remap_32(uint8 *src, uint16 *dst, uint16 *table, int length);
-#else
- void remap_32(uint8 *src, uint32 *dst, uint32 *table, int length);
-#endif
+ int make_lut_bg(int bx, int ax) MDFN_COLD;
+ int make_lut_obj(int bx, int sx) MDFN_COLD;
+ int make_lut_bg_ste(int bx, int ax) MDFN_COLD;
+ int make_lut_obj_ste(int bx, int sx) MDFN_COLD;
+ int make_lut_bgobj_ste(int bx, int sx) MDFN_COLD;
+ template<typename T> void CopyLineSurface(const uint8 *src, const unsigned cvp_line, const unsigned vp_w);
  void merge(uint8 *srca, uint8 *srcb, uint8 *dst, uint8 *table, int width);
  void color_update(int index, uint16 data);
  void make_name_lut(void);
  void parse_satb(int line);
 
+ void Recalc68KSuspend(void);
 
  public:
  #if 0

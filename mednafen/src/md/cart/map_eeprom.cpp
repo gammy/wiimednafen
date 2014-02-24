@@ -24,10 +24,6 @@
 #include "cart.h"
 #include "map_eeprom.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 typedef enum
 {
   STAND_BY = 0,
@@ -188,11 +184,7 @@ MD_Cart_Type_EEPROM::MD_Cart_Type_EEPROM(const md_game_info *ginfo, const uint8 
   throw(0);
 
  /* set SRAM start & end address */
-#ifdef MEM2
- if(!(sram = (uint8 *)Mem2ManagerAlloc(type.size_mask + 1, _("Cart EEPROM"))))
-#else
  if(!(sram = (uint8 *)MDFN_malloc(type.size_mask + 1, _("Cart EEPROM"))))
-#endif
  {
   // FIXME
   throw(-1);
@@ -203,10 +195,8 @@ MD_Cart_Type_EEPROM::MD_Cart_Type_EEPROM(const md_game_info *ginfo, const uint8 
 
 MD_Cart_Type_EEPROM::~MD_Cart_Type_EEPROM()
 {
-#ifndef MEM2
  if(sram)
   MDFN_free(sram);
-#endif
 }
 
 INLINE void MD_Cart_Type_EEPROM::Detect_START()

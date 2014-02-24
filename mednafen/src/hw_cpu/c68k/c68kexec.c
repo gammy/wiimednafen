@@ -103,36 +103,36 @@ static const s32 c68k_exception_cycle_table[256] =
 // main exec function
 //////////////////////
 
-static u32 C68k_Initialised = 0;
-
-s32 C68K_FASTCALL C68k_Exec(c68k_struc *cpu)
+void C68K_FASTCALL C68k_Exec(c68k_struc *cpu)
 {
     c68k_struc *CPU;
     u32 PC;
-    s32 CCnt = 0;
     u32 Opcode;
 
 #ifndef C68K_GEN
+
+#define timestamp cpu->timestamp
 
     CPU = cpu;
     PC = CPU->PC;
 
     if (CPU->Status & (C68K_DISABLE | C68K_FAULTED))
     {
-	return 4;	// Close enough >_>
+	timestamp += 4;	// Close enough >_>
+	return;
         //return (CPU->Status | 0x80000000);
     }
 
     CHECK_INT
 
     if (CPU->Status & (C68K_HALTED | C68K_WAITING))
-     return 1;
+    {
+     timestamp++;
+     return;
+    }
 
     Opcode = FETCH_WORD;
     PC += 2;
-
-    #include "c68k_ini.inc"
-    //goto *JumpTable[Opcode];
 
     switch(Opcode)
     {
@@ -154,16 +154,14 @@ s32 C68K_FASTCALL C68k_Exec(c68k_struc *cpu)
      #include "c68k_opF.inc"
     }
 
-C68k_Exec_End:
-    CHECK_INT
-
+C68k_Exec_End: ;
 C68k_Exec_Really_End:
     CPU->PC = PC;
     
-    return (-CCnt);
+    return;
 
 #else
-    return 0;
+    return;
 #endif
 }
 

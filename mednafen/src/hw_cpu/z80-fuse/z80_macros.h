@@ -1,7 +1,7 @@
 /* z80_macros.h: Some commonly used z80 things as macros
-   Copyright (c) 1999-2003 Philip Kendall
+   Copyright (c) 1999-2011 Philip Kendall
 
-   $Id: z80_macros.h,v 1.32 2004/06/09 10:55:09 pak21 Exp $
+   $Id: z80_macros.h 4624 2012-01-09 20:59:35Z pak21 $
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,14 +13,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
    Author contact information:
 
-   E-mail: pak21-fuse@srcf.ucam.org
-   Postal address: 15 Crescent Road, Wokingham, Berks, RG40 2DB, England
+   E-mail: philip-fuse@shadowmagic.org.uk
 
 */
 
@@ -84,6 +83,8 @@
 #define IFF2 z80.iff2
 #define IM   z80.im
 
+#define IR ( ( z80.i ) << 8 | ( z80.r7 & 0x80 ) | ( z80.r & 0x7f ) )
+
 /* The flags */
 
 #define FLAG_C	0x01
@@ -100,8 +101,42 @@
    reasons in the main core, but a function for flexibility when building
    the core tester */
 
-#define contend_read(a, t) z80_tstates += (t);
-#define contend_write(a, t) z80_tstates += (t);
+#ifndef CORETEST
+
+#if 0
+#define contend_read(address,time) \
+  if( memory_map_read[ (address) >> MEMORY_PAGE_SIZE_LOGARITHM ].contended ) \
+    z80_tstates += ula_contention[ z80_tstates ]; \
+  z80_tstates += (time);
+
+#define contend_read_no_mreq(address,time) \
+  if( memory_map_read[ (address) >> MEMORY_PAGE_SIZE_LOGARITHM ].contended ) \
+    z80_tstates += ula_contention_no_mreq[ z80_tstates ]; \
+  z80_tstates += (time);
+
+#define contend_write_no_mreq(address,time) \
+  if( memory_map_write[ (address) >> MEMORY_PAGE_SIZE_LOGARITHM ].contended ) \
+    z80_tstates += ula_contention_no_mreq[ z80_tstates ]; \
+  z80_tstates += (time);
+#endif
+
+#define contend_read(address,time) \
+  z80_tstates += (time);
+
+#define contend_read_no_mreq(address,time) \
+  z80_tstates += (time);
+
+#define contend_write_no_mreq(address,time) \
+  z80_tstates += (time);
+
+
+#else				/* #ifndef CORETEST */
+
+void contend_read( uint16 address, uint32 time );
+void contend_read_no_mreq( uint16 address, uint32 time );
+void contend_write_no_mreq( uint16 address, uint32 time );
+
+#endif				/* #ifndef CORETEST */
 
 /* Some commonly used instructions */
 #define AND(value)\
@@ -154,7 +189,6 @@
   uint8 lookup = ( (  (value1) & 0x0800 ) >> 11 ) | \
 			    ( (  (value2) & 0x0800 ) >> 10 ) | \
 			    ( ( add16temp & 0x0800 ) >>  9 );  \
-  z80_tstates += 7;\
   (value1) = add16temp;\
   F = ( F & ( FLAG_V | FLAG_Z | FLAG_S ) ) |\
     ( add16temp & 0x10000 ? FLAG_C : 0 )|\
@@ -166,19 +200,24 @@
    right thing assuming it's given a constant for 'bit' */
 #define BIT( bit, value ) \
 { \
-  F = ( F & FLAG_C ) | FLAG_H; \
+  F = ( F & FLAG_C ) | FLAG_H | ( value & ( FLAG_3 | FLAG_5 ) ); \
   if( ! ( (value) & ( 0x01 << (bit) ) ) ) F |= FLAG_P | FLAG_Z; \
-  if( (bit) == 3 && (value) & 0x08 ) F |= FLAG_3; \
-  if( (bit) == 5 && (value) & 0x20 ) F |= FLAG_5; \
   if( (bit) == 7 && (value) & 0x80 ) F |= FLAG_S; \
 }
+
+#define BIT_I( bit, value, address ) \
+{ \
+  F = ( F & FLAG_C ) | FLAG_H | ( ( address >> 8 ) & ( FLAG_3 | FLAG_5 ) ); \
+  if( ! ( (value) & ( 0x01 << (bit) ) ) ) F |= FLAG_P | FLAG_Z; \
+  if( (bit) == 7 && (value) & 0x80 ) F |= FLAG_S; \
+}  
 
 #define CALL()\
 {\
   uint8 calltempl, calltemph; \
   calltempl=Z80_RB_MACRO(PC++);\
   calltemph=Z80_RB_MACRO( PC ); \
-  contend_read( PC, 1 ); PC++;\
+  contend_read_no_mreq( PC, 1 ); PC++;\
   PUSH16(PCL,PCH);\
   PCL=calltempl; PCH=calltemph;\
 }
@@ -256,8 +295,9 @@ break
 #define JR()\
 {\
   int8 jrtemp = Z80_RB_MACRO( PC ); \
-  contend_read( PC, 1 ); contend_read( PC, 1 ); contend_read( PC, 1 ); \
-  contend_read( PC, 1 ); contend_read( PC, 1 ); \
+  contend_read_no_mreq( PC, 1 ); contend_read_no_mreq( PC, 1 ); \
+  contend_read_no_mreq( PC, 1 ); contend_read_no_mreq( PC, 1 ); \
+  contend_read_no_mreq( PC, 1 ); \
   PC += jrtemp; \
 }
 
@@ -265,11 +305,6 @@ break
 {\
   A |= (value);\
   F = sz53p_table[A];\
-}
-
-#define Z80_OUT( port, reg )\
-{\
-  Z80_WP_MACRO(port,reg);\
 }
 
 #define POP16(regl,regh)\

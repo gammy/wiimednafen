@@ -19,10 +19,6 @@
 
 #include "shared.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 namespace MDFN_IEN_MD
 {
 
@@ -32,13 +28,8 @@ void (*MD_ExtWrite8)(uint32 address, uint8 value) = NULL;
 void (*MD_ExtWrite16)(uint32 address, uint16 value) = NULL;
 
 uint8 *cart_rom = NULL; //[0x400000];   /* Cartridge ROM */
-#ifndef MEM2
 uint8 work_ram[0x10000];    /* 68K work RAM */
 uint8 zram[0x2000];         /* Z80 work RAM */
-#else
-uint8 *work_ram;    /* 68K work RAM */
-uint8 *zram;         /* Z80 work RAM */
-#endif
 uint8 zbusreq;              /* /BUSREQ from Z80 */
 uint8 zreset;               /* /RESET to Z80 */
 uint8 zbusack;              /* /BUSACK to Z80 */
@@ -70,24 +61,14 @@ void gen_init(void)
  C68k_Set_WriteW(&Main68K, MD_WriteMemory16);
 }
 
-#ifdef MEM2
-void gen_mem2_alloc(void)
-{
-  work_ram = Mem2ManagerAlloc( 0x10000, "work_ram" );
-  zram = Mem2ManagerAlloc( 0x2000, "zram" );
-}
-#endif
-
-void gen_reset(void)
+void gen_reset(bool poweron)
 {
     /* Clear RAM */
-#ifndef MEM2
-    memset(work_ram, 0, sizeof(work_ram));
-    memset(zram, 0, sizeof(zram));
-#else
-    memset(work_ram, 0, 0x10000);
-    memset(zram, 0, 0x2000);
-#endif
+    if(poweron)
+    {
+     memset(work_ram, 0, sizeof(work_ram));
+     memset(zram, 0, sizeof(zram));
+    }
 
     gen_running = 1;
     zreset  = 0;    /* Z80 is reset */
@@ -96,7 +77,10 @@ void gen_reset(void)
     zbank   = 0;    /* Assume default bank is 000000-007FFF */
     zirq    = 0;    /* No interrupts occuring */
 
-    gen_io_reset();
+    if(poweron)
+    {
+     gen_io_reset();
+    }
 
     C68k_Reset(&Main68K);
     z80_reset();

@@ -25,6 +25,7 @@
  ********************************************************************************/
 
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "c68k.h"
 #include "gen68k.h"
@@ -47,6 +48,8 @@ static void GenLogicI(char op)
         start_all(GEN_RES | GEN_SRC);
     else
         start_all(GEN_ADR | GEN_RES | GEN_SRC);
+
+    add_CCnt(8);
 
     if (current_ea != EA_DREG) current_cycle += 4;
     switch (current_size)
@@ -78,7 +81,7 @@ static void GenLogicI(char op)
     // write
     _ea_write(current_ea, current_op->reg_sft);
 
-    terminate_op(8);
+    terminate_op(0); //8);
 }
 
 static void GenLogicICCR(char op)
@@ -177,6 +180,8 @@ static void GenArithI(char op)
     else
         start_all(GEN_ALL);
 
+    add_CCnt(8);
+
     if ((op != ' ') && (current_ea != EA_DREG)) current_cycle += 4;
     switch (current_size)
     {
@@ -222,7 +227,7 @@ static void GenArithI(char op)
         _ea_write(current_ea, current_op->reg_sft);
     }
 
-    terminate_op(8);
+    terminate_op(0); //8);
 }
 
 static void GenSUBI()
@@ -248,14 +253,16 @@ static void GenBitsOp(char op, u32 dyn)
         start_all(GEN_RES | GEN_SRC);
     else
         start_all(GEN_ADR | GEN_RES | GEN_SRC);
-    
+
+    add_CCnt(4);
+
     if (current_ea == EA_DREG)
     {
         set_current_size(SIZE_LONG);
         if ((op == 'c') || (op == ' ')) current_cycle += 2;
     }
     else set_current_size(SIZE_BYTE);
-    
+
     // get shift value in src
     if (dyn)
     {
@@ -297,7 +304,7 @@ static void GenBitsOp(char op, u32 dyn)
         current_cycle += 4;
     }
 
-    terminate_op(4);
+    terminate_op(0); //4);
 }
 
 static void GenBTSTn()
@@ -439,6 +446,8 @@ static void GenMOVE(u32 size)
         start_all(GEN_RES);
     else
         start_all(GEN_ADR | GEN_RES);
+
+    add_CCnt(4);
     
     // read
     _ea_calc(current_ea, current_op->reg_sft);
@@ -454,7 +463,7 @@ static void GenMOVE(u32 size)
     else
      _ea_write(current_ea2, current_op->reg2_sft);
 
-    terminate_op(4);
+    terminate_op(0); //4);
 }
 
 static void GenMOVEB()
@@ -778,7 +787,6 @@ static void GenMOVEMaR()
     wf_op("\tsrc = 0;\n");
 
     wf_op("\tdst = adr;\n");
-    do_pre_io();
     
     wf_op("\tdo\n");
     wf_op("\t{\n");
@@ -787,12 +795,12 @@ static void GenMOVEMaR()
 
     if (current_size == SIZE_WORD)
     {
-        wf_op("\t\t\tREADSX_WORD_F(adr, CPU->DA[src])\n");
+        wf_op("\t\t\tREADSX_WOat_F(adr, CPU->DA[src])\n");
         wf_op("\t\t\tadr += 2;\n");
     }
     else
     {
-        wf_op("\t\t\tREAD_LONG_F(adr, CPU->DA[src])\n");
+        wf_op("\t\t\tREAD_LOat_F(adr, CPU->DA[src])\n");
         wf_op("\t\t\tadr += 4;\n");
     }
     wf_op("\t\t}\n");
@@ -801,7 +809,6 @@ static void GenMOVEMaR()
 
     if (current_ea == EA_AINC) wf_op("\tCPU->A[(Opcode >> %d) & 7] = adr;\n", current_op->reg_sft);
     else if (current_ea == EA_AINC7) wf_op("\tCPU->A[7] = adr;\n");
-    adds_CCnt("(adr - dst) * 2");
 
     terminate_op(movem_cycle_table[current_ea] + 12);
 }
@@ -822,7 +829,6 @@ static void GenMOVEMRa()
     else wf_op("\tsrc = 0;\n");
 
     wf_op("\tdst = adr;\n");
-    do_pre_io();
     
     wf_op("\tdo\n");
     wf_op("\t{\n");
@@ -832,7 +838,7 @@ static void GenMOVEMRa()
     if (current_size == SIZE_WORD)
     {
         if ((current_ea == EA_ADEC) || (current_ea == EA_ADEC7)) wf_op("\t\t\tadr -= 2;\n");
-        wf_op("\t\t\tWRITE_WORD_F(adr, CPU->DA[src])\n");
+        wf_op("\t\t\tWRITE_WOat_F(adr, CPU->DA[src])\n");
         if (!((current_ea == EA_ADEC) || (current_ea == EA_ADEC7))) wf_op("\t\t\tadr += 2;\n");
     }
     else
@@ -840,11 +846,11 @@ static void GenMOVEMRa()
         if ((current_ea == EA_ADEC) || (current_ea == EA_ADEC7))
         {
             wf_op("\t\t\tadr -= 4;\n");
-            wf_op("\t\t\tWRITE_LONG_DEC_F(adr, CPU->DA[src])\n");
+            wf_op("\t\t\tWRITE_LOat_DEC_F(adr, CPU->DA[src])\n");
         }
         else
         {
-            wf_op("\t\t\tWRITE_LONG_F(adr, CPU->DA[src])\n");
+            wf_op("\t\t\tWRITE_LOat_F(adr, CPU->DA[src])\n");
             wf_op("\t\t\tadr += 4;\n");
         }
     }
@@ -855,8 +861,6 @@ static void GenMOVEMRa()
 
     if (current_ea == EA_ADEC) wf_op("\tCPU->A[(Opcode >> %d) & 7] = adr;\n", current_op->reg_sft);
     else if (current_ea == EA_ADEC7) wf_op("\tCPU->A[7] = adr;\n");
-    if ((current_ea == EA_ADEC) || (current_ea == EA_ADEC7)) adds_CCnt("(dst - adr) * 2");
-    else adds_CCnt("(adr - dst) * 2");
 
     terminate_op(movem_cycle_table[current_ea] + 8);
 }
@@ -888,13 +892,15 @@ static void GenTST()
     else
         start_all(GEN_ADR | GEN_RES);
 
+    add_CCnt(4);
+
     // read
     _ea_calc(current_ea, current_op->reg_sft);
     _ea_read(current_ea, current_op->reg_sft);
     // flag calculation
     set_logic_flag();
 
-    terminate_op(4);
+    terminate_op(0); //4);
 }
 
 static void GenTAS()
@@ -1171,7 +1177,7 @@ static void GenSTOP()
     wf_op("\t}\n");
 
     wf_op("\tCPU->Status |= C68K_HALTED;\n");
-    wf_op("\tCCnt = 0;\n");
+    //wf_op("\tCCnt = 0;\n");
     
     // force end execution
     fterminate_op(4);
@@ -1534,7 +1540,7 @@ static void GenLogicaD(char op)
 
     if (current_size == SIZE_LONG)
     {
-        if (is_ea_memory(current_ea)) current_cycle += 2;
+        if (!is_ea_memory(current_ea)) current_cycle += 2;
         else current_cycle += 4;
     }
 
@@ -2063,7 +2069,7 @@ static void GenArithaD(char op)
 
     if (current_size == SIZE_LONG)
     {
-        if ((is_ea_memory(current_ea)) || (op == ' ')) current_cycle += 2;
+        if (!is_ea_memory(current_ea)) current_cycle += 2;
         else current_cycle += 4;
     }
 
@@ -2128,7 +2134,7 @@ static void GenArithA(char op)
     else
         start_all(GEN_ALL);
 
-    if ((current_size == SIZE_WORD) && (op != ' ') && (!is_ea_memory(current_ea))) current_cycle += 2;
+    if ((op != ' ') && ((current_size == SIZE_WORD) || (is_ea_memory(current_ea)))) current_cycle += 2;
 
     // read src
     _ea_calc(current_ea, current_op->reg_sft);
@@ -2903,9 +2909,10 @@ static void GenASRD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -2990,9 +2997,10 @@ static void GenLSRD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3061,9 +3069,10 @@ static void GenROXRD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3128,9 +3137,10 @@ static void GenRORD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3181,9 +3191,10 @@ static void GenASLD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3233,7 +3244,17 @@ static void GenASLD()
         wf_op("\n");
 
         // special case of shift >= size op
-        wf_op("\t\tif (sft == %d) CPU->flag_C = src << C68K_SR_C_SFT;\n", current_bits_mask + 1);
+        {
+	 unsigned bugfixo = 0;
+
+	 if(0xFF == current_bits_mask) bugfixo = 8;
+	 else if(0xFFFF == current_bits_mask) bugfixo = 16;
+	 else if(0xFFFFFFFF == current_bits_mask) bugfixo = 32;
+
+	 assert(bugfixo == 8 || bugfixo == 16 || bugfixo == 32);
+
+         wf_op("\t\tif (sft == %d) CPU->flag_C = src << C68K_SR_C_SFT;\n", bugfixo); //current_bits_mask + 1);
+	}
         wf_op("\t\telse CPU->flag_C = 0;\n");
         wf_op("\t\tCPU->flag_X = CPU->flag_C;\n");
         wf_op("\t\tif (src) CPU->flag_V = C68K_SR_V;\n");
@@ -3265,9 +3286,10 @@ static void GenLSLD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3344,9 +3366,10 @@ static void GenROXLD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3411,9 +3434,10 @@ static void GenROLD()
 //    u32 base = get_current_opcode_base();
 
     current_ea = EA_DREG;               // dst = Dx
-    if (current_size == SIZE_LONG) current_cycle += 2;
 
     start_all(GEN_RES | GEN_SRC);
+
+    if (current_size == SIZE_LONG) current_cycle += 2;
 
     wf_op("\tu32 sft;\n");
     wf_op("\n");
@@ -3651,7 +3675,7 @@ static void GenROL()
 
 // main function
 /////////////////
-int gen68k_main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     u32 i;
     u32 s;
@@ -3662,7 +3686,7 @@ int gen68k_main(int argc, char *argv[])
     {
         char fn[16];
         
-        sprintf(fn, "usb:/c68k_op%.1X.inc", (int)i);
+        sprintf(fn, "c68k_op%.1X.inc", (int)i);
         opcode_file = fopen(fn, "wt");
         if (opcode_file != NULL)
         {
@@ -3672,7 +3696,7 @@ int gen68k_main(int argc, char *argv[])
     }
 
     // init opcode jump table
-    ini_file = fopen("usb:/c68k_ini.inc", "wt");
+    ini_file = fopen("c68k_ini.inc", "wt");
 #ifndef C68K_NO_JUMP_TABLE
 #ifdef C68K_CONST_JUMP_TABLE
     for(i = 0; i < 0x10000; i++) op_jump_table[i] = OP_ILLEGAL;

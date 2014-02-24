@@ -148,8 +148,7 @@ case 0x8010:
 	u32 res;
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -157,9 +156,8 @@ case 0x8010:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8218:
 case 0x8418:
 case 0x8618:
@@ -224,8 +222,7 @@ case 0x8018:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 1;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -233,9 +230,8 @@ case 0x8018:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8220:
 case 0x8420:
 case 0x8620:
@@ -300,8 +296,8 @@ case 0x8020:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 1;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -309,9 +305,8 @@ case 0x8020:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(10)
+RET(4)
 case 0x8228:
 case 0x8428:
 case 0x8628:
@@ -384,8 +379,8 @@ case 0x8028:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 4;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -393,9 +388,8 @@ case 0x8028:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x8230:
 case 0x8430:
 case 0x8630:
@@ -468,8 +462,8 @@ case 0x8030:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 6;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -477,9 +471,8 @@ case 0x8030:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x8238:
 case 0x8438:
 case 0x8638:
@@ -496,8 +489,8 @@ case 0x8038:
 	u32 src;
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 4;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -505,9 +498,8 @@ case 0x8038:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x8239:
 case 0x8439:
 case 0x8639:
@@ -524,8 +516,8 @@ case 0x8039:
 	u32 src;
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 8;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -533,9 +525,8 @@ case 0x8039:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(16)
+RET(4)
 case 0x823A:
 case 0x843A:
 case 0x863A:
@@ -552,8 +543,8 @@ case 0x803A:
 	u32 src;
 	adr = PC + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 4;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -561,9 +552,8 @@ case 0x803A:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x823B:
 case 0x843B:
 case 0x863B:
@@ -580,8 +570,8 @@ case 0x803B:
 	u32 src;
 	adr = PC;
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 6;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -589,9 +579,8 @@ case 0x803B:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x823C:
 case 0x843C:
 case 0x863C:
@@ -632,8 +621,7 @@ case 0x801F:
 	u32 src;
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -641,9 +629,8 @@ case 0x801F:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8227:
 case 0x8427:
 case 0x8627:
@@ -660,8 +647,8 @@ case 0x8027:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	res = (u8)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -669,9 +656,8 @@ case 0x8027:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	*(BYTE_OFF + (u8*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(10)
+RET(4)
 case 0x8240:
 case 0x8440:
 case 0x8640:
@@ -822,8 +808,7 @@ case 0x8050:
 	u32 res;
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -831,9 +816,8 @@ case 0x8050:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8258:
 case 0x8458:
 case 0x8658:
@@ -898,8 +882,7 @@ case 0x8058:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -907,9 +890,8 @@ case 0x8058:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8260:
 case 0x8460:
 case 0x8660:
@@ -974,8 +956,8 @@ case 0x8060:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 2;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 2;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -983,9 +965,8 @@ case 0x8060:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(10)
+RET(4)
 case 0x8268:
 case 0x8468:
 case 0x8668:
@@ -1058,8 +1039,8 @@ case 0x8068:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1067,9 +1048,8 @@ case 0x8068:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x8270:
 case 0x8470:
 case 0x8670:
@@ -1142,8 +1122,8 @@ case 0x8070:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 6;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1151,9 +1131,8 @@ case 0x8070:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x8278:
 case 0x8478:
 case 0x8678:
@@ -1170,8 +1149,8 @@ case 0x8078:
 	u32 src;
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1179,9 +1158,8 @@ case 0x8078:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x8279:
 case 0x8479:
 case 0x8679:
@@ -1198,8 +1176,8 @@ case 0x8079:
 	u32 src;
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 8;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1207,9 +1185,8 @@ case 0x8079:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(16)
+RET(4)
 case 0x827A:
 case 0x847A:
 case 0x867A:
@@ -1226,8 +1203,8 @@ case 0x807A:
 	u32 src;
 	adr = PC + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1235,9 +1212,8 @@ case 0x807A:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(12)
+RET(4)
 case 0x827B:
 case 0x847B:
 case 0x867B:
@@ -1254,8 +1230,8 @@ case 0x807B:
 	u32 src;
 	adr = PC;
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 6;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1263,9 +1239,8 @@ case 0x807B:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x827C:
 case 0x847C:
 case 0x867C:
@@ -1306,8 +1281,7 @@ case 0x805F:
 	u32 src;
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1315,9 +1289,8 @@ case 0x805F:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(8)
+RET(4)
 case 0x8267:
 case 0x8467:
 case 0x8667:
@@ -1334,8 +1307,8 @@ case 0x8067:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 2;
+	READ_WOat_F(adr, src)
 	res = (u16)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1343,9 +1316,8 @@ case 0x8067:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	*(WORD_OFF + (u16*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(10)
+RET(4)
 case 0x8280:
 case 0x8480:
 case 0x8680:
@@ -1424,7 +1396,7 @@ case 0x8080:
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 }
-RET(8)
+RET(6)
 case 0x8290:
 case 0x8490:
 case 0x8690:
@@ -1496,8 +1468,8 @@ case 0x8090:
 	u32 res;
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 4;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1505,9 +1477,8 @@ case 0x8090:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x8298:
 case 0x8498:
 case 0x8698:
@@ -1572,8 +1543,8 @@ case 0x8098:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 4;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 4;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1581,9 +1552,8 @@ case 0x8098:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x82A0:
 case 0x84A0:
 case 0x86A0:
@@ -1648,8 +1618,8 @@ case 0x80A0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 4;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 6;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1657,9 +1627,8 @@ case 0x80A0:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(16)
+RET(4)
 case 0x82A8:
 case 0x84A8:
 case 0x86A8:
@@ -1732,8 +1701,8 @@ case 0x80A8:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 8;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1741,9 +1710,8 @@ case 0x80A8:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(18)
+RET(4)
 case 0x82B0:
 case 0x84B0:
 case 0x86B0:
@@ -1816,8 +1784,8 @@ case 0x80B0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 10;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1825,9 +1793,8 @@ case 0x80B0:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(20)
+RET(4)
 case 0x82B8:
 case 0x84B8:
 case 0x86B8:
@@ -1844,8 +1811,8 @@ case 0x80B8:
 	u32 src;
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 8;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1853,9 +1820,8 @@ case 0x80B8:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(18)
+RET(4)
 case 0x82B9:
 case 0x84B9:
 case 0x86B9:
@@ -1872,8 +1838,8 @@ case 0x80B9:
 	u32 src;
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 12;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1881,9 +1847,8 @@ case 0x80B9:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(22)
+RET(4)
 case 0x82BA:
 case 0x84BA:
 case 0x86BA:
@@ -1900,8 +1865,8 @@ case 0x80BA:
 	u32 src;
 	adr = PC + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 8;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1909,9 +1874,8 @@ case 0x80BA:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(18)
+RET(4)
 case 0x82BB:
 case 0x84BB:
 case 0x86BB:
@@ -1928,8 +1892,8 @@ case 0x80BB:
 	u32 src;
 	adr = PC;
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 10;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1937,9 +1901,8 @@ case 0x80BB:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(20)
+RET(4)
 case 0x82BC:
 case 0x84BC:
 case 0x86BC:
@@ -1963,7 +1926,7 @@ case 0x80BC:
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 }
-RET(16)
+RET(14)
 case 0x829F:
 case 0x849F:
 case 0x869F:
@@ -1980,8 +1943,8 @@ case 0x809F:
 	u32 src;
 	adr = CPU->A[7];
 	CPU->A[7] += 4;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 4;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -1989,9 +1952,8 @@ case 0x809F:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(14)
+RET(4)
 case 0x82A7:
 case 0x84A7:
 case 0x86A7:
@@ -2008,8 +1970,8 @@ case 0x80A7:
 	u32 src;
 	adr = CPU->A[7] - 4;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_LONG_F(adr, src)
+	timestamp += 6;
+	READ_LOat_F(adr, src)
 	res = (u32)CPU->D[(Opcode >> 9) & 7];
 	res |= src;
 	CPU->flag_C = 0;
@@ -2017,9 +1979,8 @@ case 0x80A7:
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	POST_IO
 }
-RET(16)
+RET(4)
 case 0x8310:
 case 0x8510:
 case 0x8710:
@@ -2092,17 +2053,15 @@ case 0x8110:
 	u32 src;
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8318:
 case 0x8518:
 case 0x8718:
@@ -2168,17 +2127,15 @@ case 0x8118:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 1;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8320:
 case 0x8520:
 case 0x8720:
@@ -2244,17 +2201,16 @@ case 0x8120:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] - 1;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 2;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(14)
+RET(8)
 case 0x8328:
 case 0x8528:
 case 0x8728:
@@ -2328,17 +2284,16 @@ case 0x8128:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 4;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(16)
+RET(8)
 case 0x8330:
 case 0x8530:
 case 0x8730:
@@ -2412,17 +2367,16 @@ case 0x8130:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 6;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(8)
 case 0x8338:
 case 0x8538:
 case 0x8738:
@@ -2440,17 +2394,16 @@ case 0x8138:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 4;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(16)
+RET(8)
 case 0x8339:
 case 0x8539:
 case 0x8739:
@@ -2468,17 +2421,16 @@ case 0x8139:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 8;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(20)
+RET(8)
 case 0x831F:
 case 0x851F:
 case 0x871F:
@@ -2496,17 +2448,15 @@ case 0x811F:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8327:
 case 0x8527:
 case 0x8727:
@@ -2524,17 +2474,16 @@ case 0x8127:
 	src = (u8)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, res)
+	timestamp += 2;
+	READ_BYat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(14)
+RET(8)
 case 0x8350:
 case 0x8550:
 case 0x8750:
@@ -2607,17 +2556,15 @@ case 0x8150:
 	u32 src;
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_WORD_F(adr, res)
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8358:
 case 0x8558:
 case 0x8758:
@@ -2683,17 +2630,15 @@ case 0x8158:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8360:
 case 0x8560:
 case 0x8760:
@@ -2759,17 +2704,16 @@ case 0x8160:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] - 2;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 2;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(14)
+RET(8)
 case 0x8368:
 case 0x8568:
 case 0x8768:
@@ -2843,17 +2787,16 @@ case 0x8168:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 4;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(16)
+RET(8)
 case 0x8370:
 case 0x8570:
 case 0x8770:
@@ -2927,17 +2870,16 @@ case 0x8170:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 6;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(8)
 case 0x8378:
 case 0x8578:
 case 0x8778:
@@ -2955,17 +2897,16 @@ case 0x8178:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 4;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(16)
+RET(8)
 case 0x8379:
 case 0x8579:
 case 0x8779:
@@ -2983,17 +2924,16 @@ case 0x8179:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 8;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(20)
+RET(8)
 case 0x835F:
 case 0x855F:
 case 0x875F:
@@ -3011,17 +2951,15 @@ case 0x815F:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(12)
+RET(8)
 case 0x8367:
 case 0x8567:
 case 0x8767:
@@ -3039,17 +2977,16 @@ case 0x8167:
 	src = (u16)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, res)
+	timestamp += 2;
+	READ_WOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 8;
 	WRITE_WORD_F(adr, res)
-	POST_IO
 }
-RET(14)
+RET(8)
 case 0x8390:
 case 0x8590:
 case 0x8790:
@@ -3122,17 +3059,16 @@ case 0x8190:
 	u32 src;
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 4;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(20)
+RET(8)
 case 0x8398:
 case 0x8598:
 case 0x8798:
@@ -3198,17 +3134,16 @@ case 0x8198:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 4;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 4;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(20)
+RET(8)
 case 0x83A0:
 case 0x85A0:
 case 0x87A0:
@@ -3274,17 +3209,16 @@ case 0x81A0:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] - 4;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 6;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(22)
+RET(8)
 case 0x83A8:
 case 0x85A8:
 case 0x87A8:
@@ -3358,17 +3292,16 @@ case 0x81A8:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 8;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(24)
+RET(8)
 case 0x83B0:
 case 0x85B0:
 case 0x87B0:
@@ -3442,17 +3375,16 @@ case 0x81B0:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 10;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(26)
+RET(8)
 case 0x83B8:
 case 0x85B8:
 case 0x87B8:
@@ -3470,17 +3402,16 @@ case 0x81B8:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 8;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(24)
+RET(8)
 case 0x83B9:
 case 0x85B9:
 case 0x87B9:
@@ -3498,17 +3429,16 @@ case 0x81B9:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 12;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(28)
+RET(8)
 case 0x839F:
 case 0x859F:
 case 0x879F:
@@ -3526,17 +3456,16 @@ case 0x819F:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7];
 	CPU->A[7] += 4;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 4;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(20)
+RET(8)
 case 0x83A7:
 case 0x85A7:
 case 0x87A7:
@@ -3554,17 +3483,16 @@ case 0x81A7:
 	src = (u32)CPU->D[(Opcode >> 9) & 7];
 	adr = CPU->A[7] - 4;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_LONG_F(adr, res)
+	timestamp += 6;
+	READ_LOat_F(adr, res)
 	res |= src;
 	CPU->flag_C = 0;
 	CPU->flag_V = 0;
 	CPU->flag_notZ = res;
 	CPU->flag_N = res >> 24;
 	WRITE_LONG_F(adr, res)
-	POST_IO
 }
-RET(22)
+RET(8)
 case 0x8300:
 case 0x8500:
 case 0x8700:
@@ -3709,11 +3637,12 @@ case 0x8108:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 1;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	adr = CPU->A[(Opcode >> 9) & 7] - 1;
 	CPU->A[(Opcode >> 9) & 7] = adr;
-	READ_BYTE_F(adr, dst)
+	timestamp += 2;
+	READ_BYat_F(adr, dst)
 	res = (dst & 0xF) - (src & 0xF) - ((CPU->flag_X >> C68K_SR_X_SFT) & 1);
 	if (res > 9) res -= 6;
 	res += (dst & 0xF0) - (src & 0xF0);
@@ -3726,9 +3655,8 @@ case 0x8108:
 	CPU->flag_notZ |= res & 0xFF;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(6)
 case 0x830F:
 case 0x850F:
 case 0x870F:
@@ -3745,11 +3673,12 @@ case 0x810F:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	adr = CPU->A[(Opcode >> 9) & 7] - 1;
 	CPU->A[(Opcode >> 9) & 7] = adr;
-	READ_BYTE_F(adr, dst)
+	timestamp += 2;
+	READ_BYat_F(adr, dst)
 	res = (dst & 0xF) - (src & 0xF) - ((CPU->flag_X >> C68K_SR_X_SFT) & 1);
 	if (res > 9) res -= 6;
 	res += (dst & 0xF0) - (src & 0xF0);
@@ -3762,9 +3691,8 @@ case 0x810F:
 	CPU->flag_notZ |= res & 0xFF;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(6)
 case 0x8F09:
 case 0x8F0A:
 case 0x8F0B:
@@ -3781,11 +3709,12 @@ case 0x8F08:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 1;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	READ_BYTE_F(adr, dst)
+	timestamp += 2;
+	READ_BYat_F(adr, dst)
 	res = (dst & 0xF) - (src & 0xF) - ((CPU->flag_X >> C68K_SR_X_SFT) & 1);
 	if (res > 9) res -= 6;
 	res += (dst & 0xF0) - (src & 0xF0);
@@ -3798,9 +3727,8 @@ case 0x8F08:
 	CPU->flag_notZ |= res & 0xFF;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(6)
 
 // SBCD7M7
 case 0x8F0F:
@@ -3811,11 +3739,12 @@ case 0x8F0F:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_BYTE_F(adr, src)
+	timestamp += 2;
+	READ_BYat_F(adr, src)
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	READ_BYTE_F(adr, dst)
+	timestamp += 2;
+	READ_BYat_F(adr, dst)
 	res = (dst & 0xF) - (src & 0xF) - ((CPU->flag_X >> C68K_SR_X_SFT) & 1);
 	if (res > 9) res -= 6;
 	res += (dst & 0xF0) - (src & 0xF0);
@@ -3828,9 +3757,8 @@ case 0x8F0F:
 	CPU->flag_notZ |= res & 0xFF;
 	CPU->flag_N = res;
 	WRITE_BYTE_F(adr, res)
-	POST_IO
 }
-RET(18)
+RET(6)
 case 0x82C0:
 case 0x84C0:
 case 0x86C0:
@@ -3911,14 +3839,12 @@ case 0x80C0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
 	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
@@ -4014,8 +3940,7 @@ case 0x80D0:
 	u32 dst;
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4025,16 +3950,13 @@ case 0x80D0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4046,7 +3968,7 @@ case 0x80D0:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(74)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4056,7 +3978,7 @@ case 0x80D0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(94)
+RET(90)
 case 0x82D8:
 case 0x84D8:
 case 0x86D8:
@@ -4122,8 +4044,7 @@ case 0x80D8:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4133,16 +4054,13 @@ case 0x80D8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4154,7 +4072,7 @@ case 0x80D8:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(74)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4164,7 +4082,7 @@ case 0x80D8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(94)
+RET(90)
 case 0x82E0:
 case 0x84E0:
 case 0x86E0:
@@ -4230,8 +4148,8 @@ case 0x80E0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 2;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 2;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4241,16 +4159,13 @@ case 0x80E0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(16)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4262,7 +4177,7 @@ case 0x80E0:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(76)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4272,7 +4187,7 @@ case 0x80E0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(96)
+RET(90)
 case 0x82E8:
 case 0x84E8:
 case 0x86E8:
@@ -4346,8 +4261,8 @@ case 0x80E8:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4357,16 +4272,13 @@ case 0x80E8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4378,7 +4290,7 @@ case 0x80E8:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(78)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4388,7 +4300,7 @@ case 0x80E8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(98)
+RET(90)
 case 0x82F0:
 case 0x84F0:
 case 0x86F0:
@@ -4462,8 +4374,8 @@ case 0x80F0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 6;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4473,16 +4385,13 @@ case 0x80F0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(20)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4494,7 +4403,7 @@ case 0x80F0:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(80)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4504,7 +4413,7 @@ case 0x80F0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(100)
+RET(90)
 case 0x82F8:
 case 0x84F8:
 case 0x86F8:
@@ -4522,8 +4431,8 @@ case 0x80F8:
 	u32 src;
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4533,16 +4442,13 @@ case 0x80F8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4554,7 +4460,7 @@ case 0x80F8:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(78)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4564,7 +4470,7 @@ case 0x80F8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(98)
+RET(90)
 case 0x82F9:
 case 0x84F9:
 case 0x86F9:
@@ -4582,8 +4488,8 @@ case 0x80F9:
 	u32 src;
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 8;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4593,16 +4499,13 @@ case 0x80F9:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(22)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4614,7 +4517,7 @@ case 0x80F9:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(82)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4624,7 +4527,7 @@ case 0x80F9:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(102)
+RET(90)
 case 0x82FA:
 case 0x84FA:
 case 0x86FA:
@@ -4642,8 +4545,8 @@ case 0x80FA:
 	u32 src;
 	adr = PC + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 4;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4653,16 +4556,13 @@ case 0x80FA:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4674,7 +4574,7 @@ case 0x80FA:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(78)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4684,7 +4584,7 @@ case 0x80FA:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(98)
+RET(90)
 case 0x82FB:
 case 0x84FB:
 case 0x86FB:
@@ -4702,8 +4602,8 @@ case 0x80FB:
 	u32 src;
 	adr = PC;
 	DECODE_EXT_WORD
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 6;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4713,16 +4613,13 @@ case 0x80FB:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(20)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4734,7 +4631,7 @@ case 0x80FB:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(80)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4744,7 +4641,7 @@ case 0x80FB:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(100)
+RET(90)
 case 0x82FC:
 case 0x84FC:
 case 0x86FC:
@@ -4770,14 +4667,12 @@ case 0x80FC:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
 	RET(14)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
@@ -4818,8 +4713,7 @@ case 0x80DF:
 	u32 src;
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4829,16 +4723,13 @@ case 0x80DF:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4850,7 +4741,7 @@ case 0x80DF:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(74)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4860,7 +4751,7 @@ case 0x80DF:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(94)
+RET(90)
 case 0x82E7:
 case 0x84E7:
 case 0x86E7:
@@ -4878,8 +4769,8 @@ case 0x80E7:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READ_WORD_F(adr, src)
+	timestamp += 2;
+	READ_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -4889,16 +4780,13 @@ case 0x80E7:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(16)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	{
@@ -4910,7 +4798,7 @@ case 0x80E7:
 		if (q & 0xFFFF0000)
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(76)
+	RET(70)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -4920,7 +4808,7 @@ case 0x80E7:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(96)
+RET(90)
 case 0x83C0:
 case 0x85C0:
 case 0x87C0:
@@ -5001,14 +4889,12 @@ case 0x81C0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
 	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
@@ -5112,8 +4998,7 @@ case 0x81D0:
 	u32 dst;
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5123,16 +5008,13 @@ case 0x81D0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5141,7 +5023,7 @@ case 0x81D0:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(54)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5152,7 +5034,7 @@ case 0x81D0:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(84)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5162,7 +5044,7 @@ case 0x81D0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(112)
+RET(108)
 case 0x83D8:
 case 0x85D8:
 case 0x87D8:
@@ -5228,8 +5110,7 @@ case 0x81D8:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	CPU->A[(Opcode >> 0) & 7] += 2;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5239,16 +5120,13 @@ case 0x81D8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5257,7 +5135,7 @@ case 0x81D8:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(54)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5268,7 +5146,7 @@ case 0x81D8:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(84)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5278,7 +5156,7 @@ case 0x81D8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(112)
+RET(108)
 case 0x83E0:
 case 0x85E0:
 case 0x87E0:
@@ -5344,8 +5222,8 @@ case 0x81E0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] - 2;
 	CPU->A[(Opcode >> 0) & 7] = adr;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 2;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5355,16 +5233,13 @@ case 0x81E0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(16)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5373,7 +5248,7 @@ case 0x81E0:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(56)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5384,7 +5259,7 @@ case 0x81E0:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(86)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5394,7 +5269,7 @@ case 0x81E0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(114)
+RET(108)
 case 0x83E8:
 case 0x85E8:
 case 0x87E8:
@@ -5468,8 +5343,8 @@ case 0x81E8:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7] + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 4;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5479,16 +5354,13 @@ case 0x81E8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5497,7 +5369,7 @@ case 0x81E8:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(58)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5508,7 +5380,7 @@ case 0x81E8:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(88)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5518,7 +5390,7 @@ case 0x81E8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(116)
+RET(108)
 case 0x83F0:
 case 0x85F0:
 case 0x87F0:
@@ -5592,8 +5464,8 @@ case 0x81F0:
 	u32 src;
 	adr = CPU->A[(Opcode >> 0) & 7];
 	DECODE_EXT_WORD
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 6;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5603,16 +5475,13 @@ case 0x81F0:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(20)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5621,7 +5490,7 @@ case 0x81F0:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(60)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5632,7 +5501,7 @@ case 0x81F0:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(90)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5642,7 +5511,7 @@ case 0x81F0:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(118)
+RET(108)
 case 0x83F8:
 case 0x85F8:
 case 0x87F8:
@@ -5660,8 +5529,8 @@ case 0x81F8:
 	u32 src;
 	adr = (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 4;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5671,16 +5540,13 @@ case 0x81F8:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5689,7 +5555,7 @@ case 0x81F8:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(58)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5700,7 +5566,7 @@ case 0x81F8:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(88)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5710,7 +5576,7 @@ case 0x81F8:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(116)
+RET(108)
 case 0x83F9:
 case 0x85F9:
 case 0x87F9:
@@ -5728,8 +5594,8 @@ case 0x81F9:
 	u32 src;
 	adr = (s32)FETCH_LONG;
 	PC += 4;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 8;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5739,16 +5605,13 @@ case 0x81F9:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(22)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5757,7 +5620,7 @@ case 0x81F9:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(62)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5768,7 +5631,7 @@ case 0x81F9:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(92)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5778,7 +5641,7 @@ case 0x81F9:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(120)
+RET(108)
 case 0x83FA:
 case 0x85FA:
 case 0x87FA:
@@ -5796,8 +5659,8 @@ case 0x81FA:
 	u32 src;
 	adr = PC + (s32)(s16)FETCH_WORD;
 	PC += 2;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 4;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5807,16 +5670,13 @@ case 0x81FA:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(18)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5825,7 +5685,7 @@ case 0x81FA:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(58)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5836,7 +5696,7 @@ case 0x81FA:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(88)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5846,7 +5706,7 @@ case 0x81FA:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(116)
+RET(108)
 case 0x83FB:
 case 0x85FB:
 case 0x87FB:
@@ -5864,8 +5724,8 @@ case 0x81FB:
 	u32 src;
 	adr = PC;
 	DECODE_EXT_WORD
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 6;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -5875,16 +5735,13 @@ case 0x81FB:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(20)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -5893,7 +5750,7 @@ case 0x81FB:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(60)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -5904,7 +5761,7 @@ case 0x81FB:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(90)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -5914,7 +5771,7 @@ case 0x81FB:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(118)
+RET(108)
 case 0x83FC:
 case 0x85FC:
 case 0x87FC:
@@ -5940,14 +5797,12 @@ case 0x81FC:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
 	RET(14)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
@@ -5996,8 +5851,7 @@ case 0x81DF:
 	u32 src;
 	adr = CPU->A[7];
 	CPU->A[7] += 2;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -6007,16 +5861,13 @@ case 0x81DF:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(14)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -6025,7 +5876,7 @@ case 0x81DF:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(54)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -6036,7 +5887,7 @@ case 0x81DF:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(84)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -6046,7 +5897,7 @@ case 0x81DF:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(112)
+RET(108)
 case 0x83E7:
 case 0x85E7:
 case 0x87E7:
@@ -6064,8 +5915,8 @@ case 0x81E7:
 	u32 src;
 	adr = CPU->A[7] - 2;
 	CPU->A[7] = adr;
-	PRE_IO
-	READSX_WORD_F(adr, src)
+	timestamp += 2;
+	READSX_WOat_F(adr, src)
 	if (src == 0)
 	{
 		if (!CPU->flag_S)
@@ -6075,16 +5926,13 @@ case 0x81E7:
 			CPU->A[7] = res;
 		}
 		res = C68K_ZERO_DIVIDE_EX;
-	POST_IO
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 		PUSH_32_F(PC)
 		PUSH_16_F(GET_SR)
 		CPU->flag_S = C68K_SR_S;
 		READ_LONG_F(res * 4, PC)
 		SET_PC(PC)
-	POST_IO
-	RET(16)
+	RET(10)
 	}
 	dst = (u32)CPU->D[(Opcode >> 9) & 7];
 	if ((dst == 0x80000000) && (src == -1))
@@ -6093,7 +5941,7 @@ case 0x81E7:
 		CPU->flag_V = CPU->flag_C = 0;
 		res = 0;
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
-	RET(56)
+	RET(50)
 	}
 	{
 		s32 q, r;
@@ -6104,7 +5952,7 @@ case 0x81E7:
 		if ((q > 0x7FFF) || (q < -0x8000))
 		{
 			CPU->flag_V = C68K_SR_V;
-	RET(86)
+	RET(80)
 		}
 		q &= 0x0000FFFF;
 		CPU->flag_notZ = q;
@@ -6114,4 +5962,4 @@ case 0x81E7:
 	*((u32*)(&CPU->D[(Opcode >> 9) & 7])) = res;
 	}
 }
-RET(114)
+RET(108)

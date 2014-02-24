@@ -63,12 +63,7 @@ u16 C68K_FASTCALL C68k_Read16_Dummy(const u32 adr);
 void C68K_FASTCALL C68k_Write8_Dummy(const u32 adr, u8 data);
 void C68K_FASTCALL C68k_Write16_Dummy(const u32 adr, u16 data);
 
-u32 C68k_Read_Byte(c68k_struc *cpu, u32 adr);
-u32 C68k_Read_Word(c68k_struc *cpu, u32 adr);
-u32 C68k_Read_Long(c68k_struc *cpu, u32 adr);
-void C68k_Write_Byte(c68k_struc *cpu, u32 adr, u32 data);
-void C68k_Write_Word(c68k_struc *cpu, u32 adr, u32 data);
-void C68k_Write_Long(c68k_struc *cpu, u32 adr, u32 data);
+static u32 C68k_Read_Long(c68k_struc *cpu, u32 adr);
 
 s32  C68K_FASTCALL C68k_Interrupt_Ack_Dummy(s32 level);
 void C68K_FASTCALL C68k_Reset_Dummy(void);
@@ -159,35 +154,9 @@ void C68K_FASTCALL C68k_Reset_Dummy(void)
 // Read / Write core functions
 ///////////////////////////////
 
-u32 C68k_Read_Byte(c68k_struc *cpu, u32 adr)
-{
-    return cpu->Read_Byte(adr);
-}
-
-u32 C68k_Read_Word(c68k_struc *cpu, u32 adr)
-{
-    return cpu->Read_Word(adr);
-}
-
-u32 C68k_Read_Long(c68k_struc *cpu, u32 adr)
+static u32 C68k_Read_Long(c68k_struc *cpu, u32 adr)
 {
     return (cpu->Read_Word(adr) << 16) | (cpu->Read_Word(adr + 2) & 0xFFFF);
-}
-
-void C68k_Write_Byte(c68k_struc *cpu, u32 adr, u32 data)
-{
-    cpu->Write_Byte(adr, data);
-}
-
-void C68k_Write_Word(c68k_struc *cpu, u32 adr, u32 data)
-{
-    cpu->Write_Word(adr, data);
-}
-
-void C68k_Write_Long(c68k_struc *cpu, u32 adr, u32 data)
-{
-    cpu->Write_Word(adr, data >> 16);
-    cpu->Write_Word(adr + 2, data & 0xFFFF);
 }
 
 // setting core functions

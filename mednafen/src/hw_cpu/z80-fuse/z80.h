@@ -1,7 +1,7 @@
 /* z80.h: z80 emulation core
    Copyright (c) 1999-2003 Philip Kendall
 
-   $Id: z80.h,v 1.11 2004/07/04 18:48:40 pak21 Exp $
+   $Id: z80.h 4640 2012-01-21 13:26:35Z pak21 $
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,19 +13,20 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
    Author contact information:
 
-   E-mail: pak21-fuse@srcf.ucam.org
-   Postal address: 15 Crescent Road, Wokingham, Berks, RG40 2DB, England
+   E-mail: philip-fuse@shadowmagic.org.uk
 
 */
 
 #ifndef FUSE_Z80_H
 #define FUSE_Z80_H
+
+#include "../../mednafen.h"
 
 /* Union allowing a register pair to be accessed as bytes or as a word */
 typedef union {
@@ -56,10 +57,8 @@ typedef struct {
 
 } processor;
 
-uint16 z80_getpc(void);
-
-void z80_init(void);
-void z80_reset(void);
+void z80_init( void );
+void z80_reset( void );
 
 int z80_interrupt( void );
 void z80_nmi( void );
@@ -69,6 +68,7 @@ int z80_do_opcode(void);
 void z80_enable_interrupts( void );
 
 extern processor z80;
+inline uint16 z80_getpc(void) { return z80.pc.w; }
 extern const uint8 halfcarry_add_table[];
 extern const uint8 halfcarry_sub_table[];
 extern const uint8 overflow_add_table[];
@@ -102,23 +102,23 @@ static INLINE void Z80_WP_MACRO(uint16 A, uint8 V)
 
 // Read mem
 static INLINE uint8 Z80_RB_MACRO(uint16 A)
-{
- z80_tstates += 3;
+{ 
+ z80_tstates += 3; 
  return(z80_readbyte(A));
 }
 
 // Read port
 static INLINE uint8 Z80_RP_MACRO(uint16 A)
-{
- z80_tstates += 4;
+{ 
+ z80_tstates += 4; 
  return(z80_readport(A));
 }
 
 
 void z80_set_interrupt(int set);
 
-
-#include "../../state.h"
+#include "../../state.h" // FIXME still using old wii build system
+//#include "../../mednafen/state.h"
 int z80_state_action(StateMem *sm, int load, int data_only, const char *section_name);
 
 #endif			/* #ifndef FUSE_Z80_H */

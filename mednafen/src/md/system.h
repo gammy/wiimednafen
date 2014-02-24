@@ -29,8 +29,10 @@ extern int32 md_timestamp;
 
 void MD_ExitCPULoop(void);
 void MD_Suspend68K(bool state);
+void MD_68KHALTHack(void);
 bool MD_Is68KSuspended(void);
 
+void MD_UpdateSubStuff();
 
 extern bool MD_IsCD;
 extern int MD_HackyHackyMode;

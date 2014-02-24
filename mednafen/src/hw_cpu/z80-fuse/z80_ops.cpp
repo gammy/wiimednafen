@@ -1,7 +1,7 @@
 /* z80_ops.c: Process the next opcode
-   Copyright (c) 1999-2004 Philip Kendall, Witold Filipczyk
+   Copyright (c) 1999-2005 Philip Kendall, Witold Filipczyk
 
-   $Id: z80_ops.c,v 1.56 2004/06/09 10:55:09 pak21 Exp $
+   $Id: z80_ops.c 4624 2012-01-09 20:59:35Z pak21 $
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,20 +13,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
    Author contact information:
 
-   E-mail: pak21-fuse@srcf.ucam.org
-   Postal address: 15 Crescent Road, Wokingham, Berks, RG40 2DB, England
+   E-mail: philip-fuse@shadowmagic.org.uk
 
 */
-
-/* Modified somewhat for usage in Mednafen */
-
-#include "../../mednafen.h"
 
 #include "z80.h"
 
@@ -50,6 +45,7 @@ int z80_do_opcode( void )
    return(ret);
   }
  }
+
  uint8 opcode;
 
     /* Check to see if M1 cycles happen on even z80_tstates */
@@ -66,7 +62,7 @@ int z80_do_opcode( void )
 
     switch(opcode) 
     {
-     #include "opcodes_base.inc"
+     #include "opcodes_base.c"
     }
 
    int ret = z80_tstates - last_z80_tstates;

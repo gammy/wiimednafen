@@ -4106,13 +4106,11 @@ case 0xF000:
 		CPU->A[7] = res;
 	}
 	res = C68K_1111_EX;
-	CCnt -= c68k_exception_cycle_table[res];
-	PRE_IO
+	timestamp += c68k_exception_cycle_table[res];
 	PUSH_32_F(PC)
 	PUSH_16_F(GET_SR)
 	CPU->flag_S = C68K_SR_S;
 	READ_LONG_F(res * 4, PC)
 	SET_PC(PC)
-	POST_IO
 }
 RET(4)

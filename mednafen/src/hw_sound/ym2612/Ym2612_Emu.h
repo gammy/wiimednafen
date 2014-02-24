@@ -1,21 +1,18 @@
 // YM2612 FM sound chip emulator interface
-
-// Game_Music_Emu 0.5.2
 #ifndef YM2612_EMU_H
 #define YM2612_EMU_H
+
+#include "../../mednafen.h"
+#include "../../lepacker.h"
 
 struct Ym2612_Impl;
 
 class Ym2612_Emu  {
 	Ym2612_Impl* impl;
 public:
-	Ym2612_Emu() { impl = 0; }
+	Ym2612_Emu();
 	~Ym2612_Emu();
-	
-	// Set output sample rate and chip clock rates, in Hz. Returns non-zero
-	// if error.
-	const char* set_rate(void);
-	
+
 	// Reset to power-up state
 	void reset();
 	
@@ -31,14 +28,12 @@ public:
 	
 	int read(void);
 
-	// Run and add pair_count samples into current output buffer contents
+	// Run and add nt samples into current output buffer contents
 	typedef short sample_t;
 	enum { out_chan_count = 2 }; // stereo
-	void run( int pair_count, sample_t* out );
+	void run( sample_t* out );
 
-	unsigned int get_state_max_len(void);
-	void save_state(unsigned char *buffer);
-	void load_state(const unsigned char *buffer);
+	void serialize(MDFN::LEPacker &slizer, bool load);
 };
 
 #endif

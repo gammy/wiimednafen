@@ -68,8 +68,8 @@ extern "C" {
  #define WORD_OFF 0
 #endif
 
-//#define C68K_NO_JUMP_TABLE
-#define C68K_CONST_JUMP_TABLE
+#define C68K_NO_JUMP_TABLE
+//#define C68K_CONST_JUMP_TABLE
 //#define C68K_AUTOVECTOR_CALLBACK
 
 // 68K core types definitions
@@ -157,8 +157,8 @@ typedef struct
     u32 Status;
     s32 IRQLine;
     
-    s32 CycleIO;
-    s32 CycleSup;
+    s32 timestamp;
+
     u32 dirty1;
     
     C68K_READ8 *Read_Byte;                   // 32 bytes aligned
@@ -189,9 +189,7 @@ void	C68k_Set_TAS_Hack(c68k_struc *cpu, int value);
 
 s32     C68K_FASTCALL C68k_Reset(c68k_struc *cpu);
 
-// if <  0 --> error (cpu state returned)
-// if >= 0 --> number of cycles done
-s32	    C68K_FASTCALL C68k_Exec(c68k_struc *cpu);
+void	C68K_FASTCALL C68k_Exec(c68k_struc *cpu);
 
 void    C68K_FASTCALL C68k_Set_IRQ(c68k_struc *cpu, s32 level);
 

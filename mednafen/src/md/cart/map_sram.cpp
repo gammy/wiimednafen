@@ -19,10 +19,6 @@
 #include "cart.h"
 #include "map_sram.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 // TODO:  Add suport for 8-bit mapped into 16-bit space correctly
 
 class MD_Cart_Type_SRAM : public MD_Cart_Type
@@ -79,11 +75,7 @@ MD_Cart_Type_SRAM::MD_Cart_Type_SRAM(const md_game_info *ginfo, const uint8 *ROM
 
  printf("%08x %08x %08x\n", sram_start, sram_end, sram_size);
 
-#ifdef MEM2
- if(!(sram = (uint8 *)Mem2ManagerAlloc(sram_size, _("Cart SRAM"))))
-#else
  if(!(sram = (uint8 *)MDFN_malloc(sram_size, _("Cart SRAM"))))
-#endif
  {
   // FIXME
   throw(-1);
@@ -93,10 +85,8 @@ MD_Cart_Type_SRAM::MD_Cart_Type_SRAM(const md_game_info *ginfo, const uint8 *ROM
 
 MD_Cart_Type_SRAM::~MD_Cart_Type_SRAM()
 {
-#ifndef MEM2
  if(sram)
   free(sram);
-#endif
 }
 
 void MD_Cart_Type_SRAM::Reset(void)

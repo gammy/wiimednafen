@@ -30,6 +30,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "none",
   "none",
   NULL,
+  NULL,
   0,
   NULL
  },
@@ -37,6 +38,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
  {
   "gamepad2",
   "2-Button Gamepad",
+  NULL,
   NULL,
   sizeof(Gamepad2IDII) / sizeof(InputDeviceInputInfoStruct),
   Gamepad2IDII,
@@ -46,6 +48,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "gamepad",
   "3-Button Gamepad",
   NULL,
+  NULL,
   sizeof(GamepadIDII) / sizeof(InputDeviceInputInfoStruct),
   GamepadIDII,
  },
@@ -53,6 +56,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
  {
   "gamepad6",
   "6-Button Gamepad",
+  NULL,
   NULL,
   sizeof(Gamepad6IDII) / sizeof(InputDeviceInputInfoStruct),
   Gamepad6IDII,
@@ -62,6 +66,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "megamouse",
   "Sega Mega Mouse",
   NULL,
+  NULL,
   sizeof(MegaMouseIDII) / sizeof(InputDeviceInputInfoStruct),
   MegaMouseIDII,
  },
@@ -70,8 +75,8 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
 
 static const InputPortInfoStruct PortInfo[] =
 {
- { 0, "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
- { 0, "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" }
+ { "port1", "Port 1", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" },
+ { "port2", "Port 2", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" }
 };
 
 InputInfoStruct MDInputInfo =
@@ -267,8 +272,9 @@ void MD_Input_Device::Power(void)
 
 void MD_Input_Device::UpdateBus(const int32 master_timestamp, uint8 &bus, const uint8 genesis_asserted)
 {
-
-
+// printf("%02x -- %02x\n", bus, genesis_asserted);
+// bus |= 0x3F &~ genesis_asserted;
+// bus &= genesis_asserted;
 }
 
 void MD_Input_Device::UpdatePhysicalState(const void *data)
@@ -359,12 +365,7 @@ void MDINPUT_SetInput(int aport, const char *type, void *ptr)
   itype = DEVICE_MM;
  }
 
-#ifdef WII
-  if( ptr )
-    data_ptr[aport] = ptr;
-#else
-  data_ptr[aport] = ptr;
-#endif
+ data_ptr[aport] = ptr;
  SetDevice(aport, itype);
 
  UpdateBusThing(md_timestamp);

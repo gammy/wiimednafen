@@ -7,7 +7,6 @@ namespace MDFN_IEN_MD
 /* Function prototypes */
 unsigned int m68k_read_bus_8(unsigned int address);
 unsigned int m68k_read_bus_16(unsigned int address);
-void m68k_unused_w(unsigned int address, unsigned int value);
 
 void m68k_lockup_w_8(unsigned int address, unsigned int value);
 void m68k_lockup_w_16(unsigned int address, unsigned int value);

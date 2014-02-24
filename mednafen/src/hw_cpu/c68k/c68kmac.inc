@@ -42,15 +42,10 @@
 
 
 #define RET(A)                  \
-    CCnt -= (A);                \
+    timestamp += (A);                \
     goto C68k_Exec_End;
 
 #define SET_PC(A)	PC = (A);
-
-#define PRE_IO            
-//    CPU->CycleIO = CCnt;
-#define POST_IO    
-//    CCnt = CPU->CycleIO;
 
 #define READ_BYTE_F(A, D)           \
     D = CPU->Read_Byte(A) & 0xFF;
@@ -104,6 +99,76 @@
     D |= CPU->Read_Word(CPU->A[7] + 2) & 0xFFFF;    \
     CPU->A[7] += 4;
 
+/* */
+/* New timing hacky stuff */
+/* */
+
+#define READ_BYat_F(A, D)           	\
+    timestamp += 2;				\
+    D = CPU->Read_Byte(A) & 0xFF;	\
+    timestamp += 2;
+
+#define READ_WOat_F(A, D)           	\
+    timestamp += 2;				\
+    D = CPU->Read_Word(A) & 0xFFFF;	\
+    timestamp += 2;
+
+#define READ_LOat_F(A, D)               	\
+    timestamp += 2;					\
+    D = CPU->Read_Word((A)) << 16;          	\
+    timestamp += 2;					\
+    timestamp += 2;					\
+    D |= CPU->Read_Word((A) + 2) & 0xFFFF;	\
+    timestamp += 2;
+
+#define READSX_BYat_F(A, D)             \
+    timestamp += 2;				\
+    D = (s32)(s8)CPU->Read_Byte(A);	\
+    timestamp += 2;
+
+#define READSX_WOat_F(A, D)             \
+    timestamp += 2;				\
+    D = (s32)(s16)CPU->Read_Word(A);	\
+    timestamp += 2;
+
+#define READSX_LOat_F(A, D)             	\
+    timestamp += 2;					\
+    D = CPU->Read_Word((A)) << 16;          	\
+    timestamp += 2;					\
+    timestamp += 2;					\
+    D |= CPU->Read_Word((A) + 2) & 0xFFFF;	\
+    timestamp += 2;
+
+#define WRITE_BYat_F(A, D)      \
+    timestamp += 2;			\
+    CPU->Write_Byte(A, D);	\
+    timestamp += 2;
+
+#define WRITE_WOat_F(A, D)      \
+    timestamp += 2;			\
+    CPU->Write_Word(A, D);	\
+    timestamp += 2;			\
+
+#define WRITE_LOat_F(A, D)              	\
+    timestamp += 2;					\
+    CPU->Write_Word((A), (D) >> 16);        	\
+    timestamp += 2;					\
+    timestamp += 2;					\
+    CPU->Write_Word((A) + 2, (D) & 0xFFFF);	\
+    timestamp += 2;
+
+#define WRITE_LOat_DEC_F(A, D)          	\
+    timestamp += 2;					\
+    CPU->Write_Word((A) + 2, (D) & 0xFFFF); 	\
+    timestamp += 2;					\
+    timestamp += 2;					\
+    CPU->Write_Word((A), (D) >> 16);		\
+    timestamp += 2;
+
+/* */
+/* */
+/* */
+
 #define FETCH_BYTE          ((u8)CPU->Read_Word(PC))
 #define FETCH_WORD          CPU->Read_Word(PC)
 #define FETCH_LONG          ((CPU->Read_Word(PC) << 16) | (CPU->Read_Word(PC + 2)))
@@ -154,7 +219,6 @@
         if ((line == 7) || (line > CPU->flag_I))    \
         {                                           \
 	    cpu->Status &= ~(C68K_HALTED | C68K_WAITING);	\
-            PRE_IO                                  \
                                                     \
             /* get vector */                                        \
             CPU->IRQLine = 0;                                       \
@@ -163,7 +227,7 @@
                 vect = C68K_INTERRUPT_AUTOVECTOR_EX + (line & 7);   \
                                                                     \
             /* adjust CCnt */                                       \
-            CCnt -= c68k_exception_cycle_table[vect];               \
+            timestamp += c68k_exception_cycle_table[vect];               \
                                                                     \
             /* swap A7 and USP */           \
             if (!CPU->flag_S)               \
@@ -186,7 +250,5 @@
             /* fetch new PC */              \
             READ_LONG_F(vect * 4, PC)       \
             SET_PC(PC)                      \
-                                            \
-            POST_IO                         \
         }                                   \
     }

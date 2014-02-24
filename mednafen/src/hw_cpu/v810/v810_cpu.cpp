@@ -41,8 +41,9 @@ found freely through public domain sources.
 //////////////////////////////////////////////////////////
 // CPU routines
 
-//#include "mednafen/mednafen.h"
-#include "../../mednafen.h"
+#include "mednafen/mednafen.h"
+#include <mednafen/masmem.h>
+
 //#include "pcfx.h"
 //#include "debug.h"
 
@@ -54,10 +55,6 @@ found freely through public domain sources.
 #include "v810_cpuD.h"
 
 //#include "fpu-new/softfloat.h"
-
-#ifdef MEM2
-#include "mem2.h"
-#endif
 
 V810::V810()
 {
@@ -91,6 +88,32 @@ V810::V810()
 V810::~V810()
 {
 
+}
+
+INLINE void V810::RecalcIPendingCache(void)
+{
+ IPendingCache = 0;
+
+ // Of course don't generate an interrupt if there's not one pending!
+ if(ilevel < 0)
+  return;
+
+ // If CPU is halted because of a fatal exception, don't let an interrupt
+ // take us out of this halted status.
+ if(Halted == HALT_FATAL_EXCEPTION) 
+  return;
+
+ // If the NMI pending, exception pending, and/or interrupt disabled bit
+ // is set, don't accept any interrupts.
+ if(S_REG[PSW] & (PSW_NP | PSW_EP | PSW_ID))
+  return;
+
+ // If the interrupt level is lower than the interrupt enable level, don't
+ // accept it.
+ if(ilevel < (int)((S_REG[PSW] & PSW_IA) >> 16))
+  return;
+
+ IPendingCache = 0xFF;
 }
 
 
@@ -259,6 +282,10 @@ INLINE uint16 V810::RDOP(v810_timestamp_t &timestamp, uint32 addr, uint32 meow)
 // Reinitialize the defaults in the CPU
 void V810::Reset() 
 {
+#ifdef WANT_DEBUGGER
+ if(ADDBT)
+  ADDBT(GetPC(), 0xFFFFFFF0, 0xFFF0);
+#endif
  v810_timestamp = 0;
  next_event_ts = 0x7FFFFFFF; // fixme
 
@@ -286,6 +313,8 @@ void V810::Reset()
  lastop = 0;
 
  in_bstr = FALSE;
+
+ RecalcIPendingCache();
 }
 
 bool V810::Init(V810_Emu_Mode mode, bool vb_mode)
@@ -315,10 +344,8 @@ bool V810::Init(V810_Emu_Mode mode, bool vb_mode)
 
 void V810::Kill(void)
 {
-#ifndef MEM2
  for(unsigned int i = 0; i < FastMapAllocList.size(); i++)
   MDFN_free(FastMapAllocList[i]);
-#endif 
 
  FastMapAllocList.clear();
 }
@@ -328,6 +355,7 @@ void V810::SetInt(int level)
  assert(level >= -1 && level <= 15);
 
  ilevel = level;
+ RecalcIPendingCache();
 }
 
 uint8 *V810::SetFastMap(uint32 addresses[], uint32 length, unsigned int num_addresses, const char *name)
@@ -340,11 +368,7 @@ uint8 *V810::SetFastMap(uint32 addresses[], uint32 length, unsigned int num_addr
  }
  assert((length & (V810_FAST_MAP_PSIZE - 1)) == 0);
 
-#ifdef MEM2
- if(!(ret = (uint8 *)Mem2ManagerAlloc(length + V810_FAST_MAP_TRAMPOLINE_SIZE, name)))
-#else
  if(!(ret = (uint8 *)MDFN_malloc(length + V810_FAST_MAP_TRAMPOLINE_SIZE, name)))
-#endif
  {
   return(NULL);
  }
@@ -425,7 +449,7 @@ INLINE void V810::SetSZ(uint32 value)
 }
 
 #ifdef WANT_DEBUGGER
-void V810::CheckBreakpoints(void (*callback)(int type, uint32 address, unsigned int len), uint16 MDFN_FASTCALL (*peek16)(const v810_timestamp_t, uint32), uint32 MDFN_FASTCALL (*peek32)(const v810_timestamp_t, uint32))
+void V810::CheckBreakpoints(void (*callback)(int type, uint32 address, uint32 value, unsigned int len), uint16 MDFN_FASTCALL (*peek16)(const v810_timestamp_t, uint32), uint32 MDFN_FASTCALL (*peek32)(const v810_timestamp_t, uint32))
 {
  unsigned int opcode;
  uint16 tmpop;
@@ -448,21 +472,21 @@ void V810::CheckBreakpoints(void (*callback)(int type, uint32 address, unsigned 
 
 	default: break;
 
-	case LD_B: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 1); break;
-	case LD_H: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 2); break;
-	case LD_W: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 4); break;
+	case LD_B: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 0, 1); break;
+	case LD_H: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 0, 2); break;
+	case LD_W: callback(BPOINT_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 0, 4); break;
 
-	case ST_B: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 1); break;
-	case ST_H: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 2); break;
-	case ST_W: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 4); break;
+	case ST_B: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, P_REG[(tmpop >> 5) & 0x1F] & 0x00FF, 1); break;
+	case ST_H: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, P_REG[(tmpop >> 5) & 0x1F] & 0xFFFF, 2); break;
+	case ST_W: callback(BPOINT_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, P_REG[(tmpop >> 5) & 0x1F], 4); break;
 
-	case IN_B: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 1); break;
-	case IN_H: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 2); break;
-	case IN_W: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 4); break;
+	case IN_B: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 0, 1); break;
+	case IN_H: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 0, 2); break;
+	case IN_W: callback(BPOINT_IO_READ, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 0, 4); break;
 
-	case OUT_B: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, 1); break; 
-	case OUT_H: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, 2); break;
-	case OUT_W: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, 4); break;
+	case OUT_B: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFF, P_REG[(tmpop >> 5) & 0x1F] & 0xFF, 1); break; 
+	case OUT_H: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFE, P_REG[(tmpop >> 5) & 0x1F] & 0xFFFF, 2); break;
+	case OUT_W: callback(BPOINT_IO_WRITE, (sign_16(tmpop_high)+P_REG[tmpop & 0x1F])&0xFFFFFFFC, P_REG[(tmpop >> 5) & 0x1F], 4); break;
  }
 
 }
@@ -489,8 +513,12 @@ INLINE void V810::SetSREG(v810_timestamp_t &timestamp, unsigned int which, uint3
 
 	 case EIPSW:
 	 case FEPSW:
+              	S_REG[which] = value & 0xFF3FF;
+		break;
+
 	 case PSW:
               	S_REG[which] = value & 0xFF3FF;
+		RecalcIPendingCache();
 		break;
 
 	 case EIPC:
@@ -579,7 +607,7 @@ void V810::Run_Accurate(int32 MDFN_FASTCALL (*event_handler)(const v810_timestam
 {
  const bool RB_AccurateMode = true;
 
- #define RB_ADDBT(n)
+ #define RB_ADDBT(n,o,p)
  #define RB_CPUHOOK(n)
 
  #include "v810_oploop.inc"
@@ -593,11 +621,13 @@ void V810::Run_Accurate_Debug(int32 MDFN_FASTCALL (*event_handler)(const v810_ti
 {
  const bool RB_AccurateMode = true;
 
- #define RB_ADDBT(n) ADDBT(n)
+ #define RB_ADDBT(n,o,p) ADDBT(n,o,p)
  #define RB_CPUHOOK(n) {if(CPUHook) CPUHook(n); }
+ #define RB_DEBUGMODE
 
  #include "v810_oploop.inc"
 
+ #undef RB_DEBUGMODE
  #undef RB_CPUHOOK
  #undef RB_ADDBT
 }
@@ -616,17 +646,13 @@ void V810::Run_Accurate_Debug(int32 MDFN_FASTCALL (*event_handler)(const v810_ti
 //
 #define RB_GETPC()      	((uint32)(PC_ptr - PC_base))
 
-#ifdef MSB_FIRST
-#define RB_RDOP(PC_offset, ...) (PC_ptr[PC_offset] | (PC_ptr[PC_offset + 1] << 8))
-#else
-#define RB_RDOP(PC_offset, ...) (*(uint16 *)&PC_ptr[PC_offset])
-#endif
+#define RB_RDOP(PC_offset, ...) LoadU16_LE((uint16 *)&PC_ptr[PC_offset])
 
 void V810::Run_Fast(int32 MDFN_FASTCALL (*event_handler)(const v810_timestamp_t timestamp))
 {
  const bool RB_AccurateMode = false;
 
- #define RB_ADDBT(n)
+ #define RB_ADDBT(n,o,p)
  #define RB_CPUHOOK(n)
 
  #include "v810_oploop.inc"
@@ -640,11 +666,13 @@ void V810::Run_Fast_Debug(int32 MDFN_FASTCALL (*event_handler)(const v810_timest
 {
  const bool RB_AccurateMode = false;
 
- #define RB_ADDBT(n) ADDBT(n)
+ #define RB_ADDBT(n,o,p) ADDBT(n,o,p)
  #define RB_CPUHOOK(n) { if(CPUHook) CPUHook(n); }
+ #define RB_DEBUGMODE
 
  #include "v810_oploop.inc"
 
+ #undef RB_DEBUGMODE
  #undef RB_CPUHOOK
  #undef RB_ADDBT
 }
@@ -685,7 +713,7 @@ void V810::Exit(void)
 }
 
 #ifdef WANT_DEBUGGER
-void V810::SetCPUHook(void (*newhook)(uint32 PC), void (*new_ADDBT)(uint32 PC))
+void V810::SetCPUHook(void (*newhook)(uint32 PC), void (*new_ADDBT)(uint32 old_PC, uint32 new_PC, uint32))
 {
  CPUHook = newhook;
  ADDBT = new_ADDBT;
@@ -799,7 +827,6 @@ INLINE void V810::BSTR_WWORD(v810_timestamp_t &timestamp, uint32 A, uint32 V)
                  {                                              \
 		  have_src_cache = TRUE;			\
                   src_cache = BSTR_RWORD(timestamp, src);       \
-                  src += 4;                                     \
                  }                                              \
 								\
 		 if(!have_dst_cache)				\
@@ -814,7 +841,10 @@ INLINE void V810::BSTR_WWORD(v810_timestamp_t &timestamp, uint32 A, uint32 V)
 		 len--;						\
 								\
 		 if(!srcoff)					\
+		 {                                              \
+		  src += 4;					\
 		  have_src_cache = FALSE;			\
+		 }                                              \
 								\
                  if(!dstoff)                                    \
                  {                                              \
@@ -853,7 +883,6 @@ INLINE bool V810::Do_BSTR_Search(v810_timestamp_t &timestamp, const int inc_mul,
 		 have_src_cache = TRUE;
 		 timestamp++;
 		 src_cache = BSTR_RWORD(timestamp, src);
-		 src += inc_mul * 4;
 		}
 
 		if(((src_cache >> srcoff) & 1) == bit_test)
@@ -876,6 +905,7 @@ INLINE bool V810::Do_BSTR_Search(v810_timestamp_t &timestamp, const int inc_mul,
 	        if(!srcoff)
 		{
 	         have_src_cache = FALSE;
+		 src += inc_mul * 4;
 		 if(timestamp >= next_event_ts)
 		  break;
 		}
@@ -919,6 +949,104 @@ bool V810::bstr_subop(v810_timestamp_t &timestamp, int sub_op, int arg1)
 	uint32 len =     P_REG[28];
 	uint32 dst =    (P_REG[29] & 0xFFFFFFFC);
 	uint32 src =    (P_REG[30] & 0xFFFFFFFC);
+
+#if 0
+	// Be careful not to cause 32-bit integer overflow, and careful about not shifting by 32.
+	// TODO:
+
+	// Read src[0], src[4] into shifter.
+	// Read dest[0].
+	DO_BSTR_PROLOGUE();	// if(len) { blah blah blah masking blah }
+                src_cache = BSTR_RWORD(timestamp, src);
+
+		if((uint64)(srcoff + len) > 0x20)
+                 src_cache |= (uint64)BSTR_RWORD(timestamp, src + 4) << 32;
+
+                dst_cache = BSTR_RWORD(timestamp, dst);
+
+		if(len)
+		{
+		 uint32 dst_preserve_mask;
+		 uint32 dst_change_mask;
+
+		 dst_preserve_mask = (1U << dstoff) - 1;
+
+		 if((uint64)(dstoff + len) < 0x20)
+ 		  dst_preserve_mask |= ((1U << ((0x20 - (dstoff + len)) & 0x1F)) - 1) << (dstoff + len);
+
+		 dst_change_mask = ~dst_preserve_mask;
+
+		 src_cache = BSTR_RWORD(timestamp, src);
+		 src_cache |= (uint64)BSTR_RWORD(timestamp, src + 4) << 32;
+		 dst_cache = BSTR_RWORD(timestamp, dst);
+
+		 dst_cache = (dst_cache & dst_preserve_mask) | ((dst_cache OP_THINGY_HERE (src_cache >> srcoff)) & dst_change_mask);
+		 BSTR_WWORD(timestamp, dst, dst_cache);
+
+		 if((uint64)(dstoff + len) < 0x20)
+		 {
+	          srcoff += len;
+		  dstoff += len;
+		  len = 0;
+		 }
+		 else
+		 {
+		  srcoff += (0x20 - dstoff);
+		  dstoff = 0;
+		  len -= (0x20 - dstoff);
+		  dst += 4;
+		 }
+
+		 if(srcoff >= 0x20)
+		 {
+		  srcoff &= 0x1F;
+		  src += 4;
+
+		  if(len)
+		  {
+		   src_cache >>= 32;
+		   src_cache |= (uint64)BSTR_RWORD(timestamp, src + 4) << 32;
+		  }
+		 }
+		}
+
+	DO_BSTR_PRIMARY();	// while(len >= 32) (do allow interruption; interrupt and emulator-return -
+				// they must be handled differently!)
+		while(len >= 32)
+  		{
+                 dst_cache = BSTR_RWORD(timestamp, dst);
+                 dst_cache = OP_THINGY_HERE(dst_cache, src_cache >> srcoff);
+		 BSTR_WWORD(timestamp, dst, dst_cache);
+		 len -= 32;
+		 dst += 4;
+		 src += 4;
+                 src_cache >>= 32;
+                 src_cache |= (uint64)BSTR_RWORD(timestamp, src + 4) << 32;
+		}
+
+	DO_BSTR_EPILOGUE();	// if(len) { blah blah blah masking blah }
+		if(len)
+		{
+		 uint32 dst_preserve_mask;
+		 uint32 dst_change_mask;
+
+		 dst_preserve_mask = (1U << ((0x20 - len) & 0x1F) << len;
+		 dst_change_mask = ~dst_preserve_mask;
+
+                 dst_cache = BSTR_RWORD(timestamp, dst);
+		 dst_cache = OP_THINGY_HERE(dst_cache, src_cache >> srcoff);
+		 BSTR_WWORD(timestamp, dst, dst_cache);
+		 dstoff += len;
+		 srcoff += len;
+
+                 if(srcoff >= 0x20)
+                 {
+                  srcoff &= 0x1F;
+                  src += 4;
+                 }
+		 len = 0;
+		}
+#endif
 
 	switch(sub_op)
 	{
@@ -1289,91 +1417,22 @@ void V810::fpu_subop(v810_timestamp_t &timestamp, int sub_op, int arg1, int arg2
 	}
 }
 
-bool V810::WillInterruptOccur(void)
-{
- if(ilevel < 0)
-  return(false);
-
- if(Halted == HALT_FATAL_EXCEPTION)
-  return(false);
-
- if(S_REG[PSW] & (PSW_NP | PSW_EP | PSW_ID))
-  return(false);
-
- // If the interrupt level is lower than the interrupt enable level, don't
- // accept it.
- if((unsigned int)ilevel < ((S_REG[PSW] & PSW_IA) >> 16))
-  return(false);
-
- return(true);
-}
-
-// Process interrupt level iNum
-int V810::Int(uint32 iNum) 
-{
- // If CPU is halted because of a fatal exception, don't let an interrupt
- // take us out of this halted status.
- if(Halted == HALT_FATAL_EXCEPTION) 
-  return(0);
-
- // If the NMI pending, exception pending, and/or interrupt disabled bit
- // is set, don't accept any interrupts.
- if(S_REG[PSW] & (PSW_NP | PSW_EP | PSW_ID))
-  return(0);
-
- // If the interrupt level is lower than the interrupt enable level, don't
- // accept it.
- if(iNum < ((S_REG[PSW] & PSW_IA) >> 16))
-  return(0);
-
- S_REG[EIPC]  = GetPC();
- S_REG[EIPSW] = S_REG[PSW];
-
- SetPC(0xFFFFFE00 | (iNum << 4));
-    
- S_REG[ECR] = 0xFE00 | (iNum << 4);
-
- S_REG[PSW] |= PSW_EP;
- S_REG[PSW] |= PSW_ID;
- S_REG[PSW] &= ~PSW_AE;
-
- // Now, set need to set the interrupt enable level to he level that is being processed + 1,
- // saturating at 15.
- iNum++;
-
- if(iNum > 0x0F) 
-  iNum = 0x0F;
-
- S_REG[PSW] &= ~PSW_IA;
- S_REG[PSW] |= iNum << 16;
-
- // Accepting an interrupt takes us out of normal HALT status, of course!
- Halted = HALT_NONE;
-
- // Invalidate our bitstring state(forces the instruction to be re-read, and the r/w buffers reloaded).
- if(in_bstr)
- {
-  //puts("bstr moo!");
-
-  if(have_src_cache)
-  {
-   P_REG[30] -= 4;
-  }
- }
-
- in_bstr = FALSE;
- have_src_cache = FALSE;
- have_dst_cache = FALSE;
-
- // Interrupt overhead is unknown...
- return(0);
-}
-
-
 // Generate exception
 void V810::Exception(uint32 handler, uint16 eCode) 
 {
  // Exception overhead is unknown.
+
+#ifdef WANT_DEBUGGER
+ if(ADDBT)
+ {
+  uint32 old_PC = GetPC();
+
+  if((eCode & 0xFFE0) == 0xFFA0) // Trap instruction(PC is pointing to next instruction at this point)
+   old_PC -= 2;
+
+  ADDBT(old_PC, handler, eCode);
+ }
+#endif
 
     printf("Exception: %08x %04x\n", handler, eCode);
 
@@ -1386,6 +1445,7 @@ void V810::Exception(uint32 handler, uint16 eCode)
     {
      printf("Fatal exception; Code: %08x, ECR: %08x, PSW: %08x, PC: %08x\n", eCode, S_REG[ECR], S_REG[PSW], PC);
      Halted = HALT_FATAL_EXCEPTION;
+     IPendingCache = 0;
      return;
     }
     else if(S_REG[PSW] & PSW_EP)  //Double Exception
@@ -1399,6 +1459,7 @@ void V810::Exception(uint32 handler, uint16 eCode)
      S_REG[PSW] &= ~PSW_AE;
 
      SetPC(0xFFFFFFD0);
+     IPendingCache = 0;
      return;
     }
     else 	// Regular exception
@@ -1411,6 +1472,7 @@ void V810::Exception(uint32 handler, uint16 eCode)
      S_REG[PSW] &= ~PSW_AE;
 
      SetPC(handler);
+     IPendingCache = 0;
      return;
     }
 }
@@ -1424,20 +1486,20 @@ int V810::StateAction(StateMem *sm, int load, int data_only)
 
  if(EmuMode == V810_EMU_MODE_ACCURATE)
  {
-  cache_tag_temp = (uint32 *)MDFN_malloc(sizeof(uint32 *) * 128, "cache_tag_temp");
-  cache_data_temp = (uint32 *)MDFN_malloc(sizeof(uint32 *) * 128 * 2, "cache_data_temp");
-  cache_data_valid_temp = (bool *)MDFN_malloc(sizeof(bool *) * 128 * 2, "cache_data_valid_temp");
+  cache_tag_temp = (uint32 *)malloc(sizeof(uint32 *) * 128);
+  cache_data_temp = (uint32 *)malloc(sizeof(uint32 *) * 128 * 2);
+  cache_data_valid_temp = (bool *)malloc(sizeof(bool *) * 128 * 2);
 
   if(!cache_tag_temp || !cache_data_temp || !cache_data_valid_temp)
   {
    if(cache_tag_temp)
-    MDFN_free(cache_tag_temp);
+    free(cache_tag_temp);
 
    if(cache_data_temp)
-    MDFN_free(cache_data_temp);
+    free(cache_data_temp);
 
    if(cache_data_valid_temp)
-    MDFN_free(cache_data_valid_temp);
+    free(cache_data_valid_temp);
 
    return(0);
   }
@@ -1499,6 +1561,7 @@ int V810::StateAction(StateMem *sm, int load, int data_only)
  if(load)
  {
   //clamp(&PCFX_V810.v810_timestamp, 0, 30 * 1000 * 1000);
+  RecalcIPendingCache();
 
   SetPC(PC_tmp);
   if(EmuMode == V810_EMU_MODE_ACCURATE)
@@ -1520,9 +1583,9 @@ int V810::StateAction(StateMem *sm, int load, int data_only)
 
  if(EmuMode == V810_EMU_MODE_ACCURATE)
  {
-  MDFN_free(cache_tag_temp);
-  MDFN_free(cache_data_temp);
-  MDFN_free(cache_data_valid_temp);
+  free(cache_tag_temp);
+  free(cache_data_temp);
+  free(cache_data_valid_temp);
  }
 
  return(ret);

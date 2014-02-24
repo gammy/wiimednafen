@@ -19,7 +19,7 @@
 #include "cart.h"
 #include "map_svp.h"
 
-// Basic flat-space ROM-only mapper.
+// UNFINISHED
 
 class MD_Cart_Type_SVP : public MD_Cart_Type
 {
