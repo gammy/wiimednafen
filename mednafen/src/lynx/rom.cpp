@@ -66,13 +66,12 @@ CRom::CRom(const char *romfile)
 
 	if(!BIOSFile.Open(romfile, NULL, _("Lynx Boot ROM")))
 	{
-	 throw(0);
+	 throw MDFN_Error(0, "");	// FIXME: (make MDFNFILE throw exceptions instead of calling MDFN_PrintError())
 	}
 
 	if(BIOSFile.Size() < 512)
 	{
-	 MDFN_PrintError(_("The Lynx Boot ROM Image is an incorrect size."));
-	 throw(0);
+	 throw MDFN_Error(0, _("The Lynx Boot ROM Image is an incorrect size."));
 	}
 
 	memcpy(mRomData, BIOSFile.Data(), 512);

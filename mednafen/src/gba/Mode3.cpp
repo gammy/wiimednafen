@@ -21,18 +21,17 @@
 #include "Gfx.h"
 #include "gfx-draw.h"
 
+namespace MDFN_IEN_GBA
+{
+
 void mode3RenderLine()
 {
   uint16 *palette = (uint16 *)paletteRAM;
   
   if(DISPCNT & 0x80) {
-#if 1
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
     gfxLastVCOUNT = VCOUNT;    
     return;
   }
@@ -107,13 +106,9 @@ void mode3RenderLineNoWindow()
   uint16 *palette = (uint16 *)paletteRAM;
   
   if(DISPCNT & 0x80) {
-#if 1
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
     gfxLastVCOUNT = VCOUNT;    
     return;
   }
@@ -229,13 +224,9 @@ void mode3RenderLineAll()
   uint16 *palette = (uint16 *)paletteRAM;
   
   if(DISPCNT & 0x80) {
-#if 1
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
     gfxLastVCOUNT = VCOUNT;    
     return;
   }
@@ -415,4 +406,6 @@ void mode3RenderLineAll()
   }
   gfxBG2Changed = 0;
   gfxLastVCOUNT = VCOUNT;  
+}
+
 }

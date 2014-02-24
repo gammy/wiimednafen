@@ -21,9 +21,7 @@
 #include "../player.h"
 #include "../file.h"
 #include "../state.h"
-#if 0
 #include "../movie.h"
-#endif
 #include "../mempatcher.h"
 #include "../md5.h"
 #include "GBAinline.h"
@@ -38,10 +36,10 @@
 
 #include "arm.h"
 #include "thumb.h"
+#include "../settings-driver.h"
 
-#if 0
-#include <memory.h>
-#endif
+#include "../memory.h" // FIXME still using old wii build system
+//#include <memory.h>
 #include <stdarg.h>
 #include <string.h>
 #include <trio/trio.h>
@@ -52,12 +50,25 @@
 #include "net_print.h"  
 #endif
 
-#include "../settings-driver.h"
-#include "wii_mednafen.h"
+#include "../PSFLoader.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
+namespace MDFN_IEN_GBA
+{
+
+class GSFLoader : public PSFLoader
+{
+ public:
+
+ GSFLoader(MDFNFILE *fp);
+ virtual ~GSFLoader();
+
+ virtual void HandleEXE(const uint8 *data, uint32 len, bool ignore_pcsp = false);
+
+ PSFTags tags;
+};
+
+static GSFLoader *gsf_loader = NULL;
+
 
 static bool CPUInit(const std::string bios_fn);
 static void CPUReset(void);
@@ -156,13 +167,7 @@ static const uint32 myROM[] =
  #include "myrom.h"
 };
 
-#if GBA_BPP==32
 static uint32 *systemColorMap32 = NULL; // 65536
-#elif GBA_BPP==16
-static uint16 *systemColorMap32 = NULL; // 65536
-#else
-static uint8 *systemColorMap32 = NULL; // 65536
-#endif
 static uint8 *CustomColorMap = NULL; // 32768 * 3
 static int romSize = 0x2000000;
 
@@ -509,20 +514,15 @@ bool CPUReadBatteryFile(const char *filename)
 
 void CPUCleanUp()
 {
-
  if(rom) 
  {
-#ifndef MEM2
   MDFN_free(rom);
-#endif
   rom = NULL;
  }
 
  if(vram)
  {
-#ifndef MEM2
   MDFN_free(vram);
-#endif
   vram = NULL;
  }
 
@@ -583,12 +583,9 @@ void CPUCleanUp()
  }
 }
 
-#include "../psf.h"
-static PSFINFO *pi = NULL;
-
 static void CloseGame(void)
 {
- if(!pi)
+ if(!gsf_loader)
  {
   GBA_EEPROM_SaveFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "eep").c_str());
   CPUWriteBatteryFile(MDFN_MakeFName(MDFNMKF_SAV, 0, "sav").c_str());
@@ -597,45 +594,61 @@ static void CloseGame(void)
  // Call CPUCleanUp() to deallocate memory AFTER the backup memory is saved.
  CPUCleanUp();
 
- if(pi)
-  MDFNPSF_Free(pi);
- pi = NULL;
+ if(gsf_loader)
+ {
+  delete gsf_loader;
+  gsf_loader = NULL;
+ }
 }
 
-static void gsf_load_func(void *data, uint32 len)
+GSFLoader::GSFLoader(MDFNFILE *fp)
 {
- uint32 *md = (uint32 *)data;
- uint32 entry_point, gsf_offset, size;
+ tags = Load(0x22, 1024 * 1024 * 32 + 12, fp);
+}
 
- entry_point = le32toh( md[0] );
- gsf_offset = le32toh( md[1] );
- size = le32toh( md[2] );
+GSFLoader::~GSFLoader()
+{
+
+}
+
+void GSFLoader::HandleEXE(const uint8 *data, uint32 size, bool ignore_pcsp)
+{
+ uint32 entry_point, gsf_offset, copy_size;
+
+ if(size < 12)
+  throw(MDFN_Error(0, "GSF program section is too small."));
+
+ entry_point = MDFN_de32lsb(data + 0);
+ gsf_offset = MDFN_de32lsb(data + 4);
+ copy_size = MDFN_de32lsb(data + 8);
 
 #ifdef WII_NETTRACE
- net_print_string( NULL, 0, "###### %d %d %d\n", entry_point, gsf_offset, size );
+ net_print_string( NULL, 0, "###### %d %d %d\n", entry_point, gsf_offset, copy_size );
 #endif
 
- gsf_offset &= 0x00FFFFFF;
+ //printf("0x%08x\n", entry_point);
 
- if(entry_point == 0x8000000)
+ if(copy_size > (size - 12))
+  throw(MDFN_Error(0, "GSF program section size header specifies more data than is available."));
+
+ if(gsf_offset >= 0x8000000 && gsf_offset < (0x8000000 + 0x2000000)) // ROM region
  {
-  if((gsf_offset + size) > 0x2000000)
-  {
-   // TODO:  Error message about overflow
-  }
+  if((gsf_offset + copy_size - 0x8000000) > 0x2000000)
+   throw(MDFN_Error(0, "GSF program section offset+size exceeds region bounds."));
   else
-   memcpy(rom + gsf_offset, &md[3], size);
+   memcpy(rom + gsf_offset - 0x8000000, data + 12, copy_size);
  }
- else if(entry_point == 0x2000000)
+ else if(gsf_offset >= 0x2000000 && gsf_offset < (0x2000000 + 0x40000)) // Multiboot/RAM region
  {
-  if((gsf_offset + size) > 0x40000)
-  {
-  }
+  if((gsf_offset + copy_size - 0x2000000) > 0x40000)
+   throw(MDFN_Error(0, "GSF program section offset+size exceeds region bounds."));
   else
-   memcpy(workRAM + gsf_offset, &md[3], size);
+   memcpy(workRAM + gsf_offset - 0x2000000, data + 12, copy_size);
  }
- //printf("%d %08x %08x %08x\n", len, entry_point, gsf_offset, size);
+ else
+  throw(MDFN_Error(0, "GSF program section offset specifies an unknown/unsupported region."));
 }
+
 
 static void RedoColorMap(const MDFN_PixelFormat &format) //int rshift, int gshift, int bshift)
 {
@@ -682,50 +695,41 @@ static bool TestMagic(const char *name, MDFNFILE *fp)
  return(FALSE);
 }
 
-extern bool wii_external_gba_bios;
-
 static int Load(const char *name, MDFNFILE *fp)
 {
   layerSettings = 0xFF00;
 
-#ifdef MEM2
-  if(!(rom = Mem2ManagerAdjust( fp->f_data, 0x2000000, "ROM" )))
-    return(0);
-  memset(rom + fp->size, 0xFF, 0x2000000-fp->size);
-#else
   if(!(rom = (uint8 *)MDFN_malloc(0x2000000, _("ROM"))))
-    return(0);
+   return(0);
+
   memset(rom, 0xFF, 0x2000000);
-#endif
-    
+
   if(!(workRAM = (uint8 *)MDFN_calloc(1, 0x40000, _("Work RAM"))))
   {
-#ifndef MEM2
    MDFN_free(rom);
-#endif
    return(0);
   }
 
+
   if(!memcmp(fp->data, "PSF\x22", 4))
   {
-#ifdef MEM2
-    MDFN_PrintError("GSF not currently supported.");
-    return(0);
-#endif
-
-   int t = MDFNPSF_Load(0x22, fp, &pi, gsf_load_func);
-   if(!t)
+   try
    {
-    MDFN_PrintError("GSF load error.");
+    gsf_loader = new GSFLoader(fp);
+
+    std::vector<std::string> SongNames;
+
+    SongNames.push_back(gsf_loader->tags.GetTag("title"));
+
+    Player_Init(1, gsf_loader->tags.GetTag("game"), gsf_loader->tags.GetTag("artist"), gsf_loader->tags.GetTag("copyright"), SongNames);
+   }
+   catch(std::exception &e)
+   {
+    MDFN_PrintError("%s\n", e.what());
     MDFN_free(workRAM);
-#ifndef MEM2
     MDFN_free(rom);
-#endif
     return(0);
    }
-   static UTF8 *sn;
-   sn = (UTF8*)pi->title;
-   Player_Init(1, (UTF8*)pi->game, (UTF8*)pi->artist, (UTF8*)pi->copyright, &sn);
   }
   else
   {
@@ -745,9 +749,7 @@ static int Load(const char *name, MDFNFILE *fp)
      size = 0x2000000;
    }
 
-#ifndef MEM2
    memcpy(whereToLoad, fp->data, size);
-#endif
 
    md5_context md5;
    md5.starts();
@@ -786,11 +788,7 @@ static int Load(const char *name, MDFNFILE *fp)
    return 0;
   }
 
-#ifdef MEM2
-  if(!(vram = (uint8 *)Mem2ManagerCalloc(1, 0x20000, _("VRAM"))))
-#else
   if(!(vram = (uint8 *)MDFN_calloc(1, 0x20000, _("VRAM"))))
-#endif
   {
    CPUCleanUp();
    return 0;
@@ -808,13 +806,7 @@ static int Load(const char *name, MDFNFILE *fp)
    return 0;
   }
 
-#if GBA_BPP==32
   if(!(systemColorMap32 = (uint32*)MDFN_malloc(65536 * sizeof(uint32), _("GBA Color Map"))))
-#elif GBA_BPP==16
-  if(!(systemColorMap32 = (uint16*)MDFN_malloc(65536 * sizeof(uint16), _("GBA Color Map"))))
-#else
-  if(!(systemColorMap32 = (uint8*)MDFN_malloc(65536 * sizeof(uint8), _("GBA Color Map"))))
-#endif
   {
    CPUCleanUp();
    return(0);
@@ -826,7 +818,7 @@ static int Load(const char *name, MDFNFILE *fp)
 
   MDFNGBASOUND_Init();
 
-  if(!pi)
+  if(!gsf_loader)
   {
    MDFNMP_Init(0x8000, (1 << 28) / 0x8000);
 
@@ -834,13 +826,14 @@ static int Load(const char *name, MDFNFILE *fp)
    MDFNMP_AddRAM(0x08000, 0x3 << 24, internalRAM);
   }
 
-#ifdef WII
-    // Enable/disable exernal GBA BIOS
-    MDFNI_SetSetting("gba.bios", 
-      wii_external_gba_bios ? "gba_bios.bin" : "", FALSE );
-#endif
-
-  if(!CPUInit(MDFN_GetSettingS("gba.bios")))
+//#ifdef WII
+//  // FIXME WIIFIX
+//    // Enable/disable exernal GBA BIOS
+//    MDFNI_SetSetting("gba.bios", 
+//      wii_external_gba_bios ? "gba_bios.bin" : "", FALSE );
+//#endif
+    
+  if(!CPUInit(gsf_loader ? std::string("") : MDFN_GetSettingS("gba.bios")))
   {
    CPUCleanUp();
    return(0);
@@ -850,7 +843,7 @@ static int Load(const char *name, MDFNFILE *fp)
   GBA_Flash_Init();
   eepromInit();
 
-  if(!pi)
+  if(!gsf_loader)
   {
    // EEPROM might be loaded from within CPUReadBatteryFile for support for Mednafen < 0.8.2, so call before GBA_EEPROM_LoadFile(), which
    // is more specific...kinda.
@@ -902,7 +895,6 @@ static int Load(const char *name, MDFNFILE *fp)
  return(1);
 }
 
-#if 0
 void doMirroring (bool b)
 {
   uint32 mirroredRomSize = (((romSize)>>20) & 0x3F)<<20;
@@ -919,7 +911,6 @@ void doMirroring (bool b)
     }
   }
 }
-#endif
 
 void CPUUpdateRender()
 {
@@ -2579,48 +2570,25 @@ static bool CPUInit(const std::string bios_fn)
 
   MDFNFILE bios_fp;
 
-
-#ifdef WII
-  bool error = false;
   if(!bios_fp.Open(MDFN_MakeFName(MDFNMKF_FIRMWARE, 0, bios_fn.c_str()), KnownBIOSExtensions, _("GBA BIOS")))
-#else
-  if(!bios_fp.Open(bios_fn, KnownBIOSExtensions, _("GBA BIOS")))
-#endif
   {
-#ifdef WII
-    error = true;
-#else
    return(0);
-#endif
   }
   
-#ifdef WII
-  if(!error && bios_fp.Size() != 0x4000)
-#else
   if(bios_fp.Size() != 0x4000)
-#endif
   {
    MDFN_PrintError(_("Invalid BIOS file size"));
    bios_fp.Close();
-#ifdef WII
-    error = true;
-#else
    return(0);
-#endif
   }
 
-#ifdef WII
-  if( !error )
-  {
-#endif
   memcpy(bios, bios_fp.Data(), 0x4000);
 
   bios_fp.Close();
   useBios = true;
-#ifdef WII
-  }
-#endif
  }
+
+ // FIXME WIIFIX ? Might need some bagic (see wiiversion)
 
  if(!useBios) 
  {
@@ -3074,14 +3042,8 @@ void CPULoop(MDFN_Surface *surface, int ticks)
             if(!HelloSkipper)
             {
 	      //printf("RL: %d\n", VCOUNT);
-#if GBA_BPP==32
               uint32 *dest = surface->pixels + VCOUNT * surface->pitch32;
-#elif GBA_BPP==16
-              uint16 *dest = surface->pixels16 + VCOUNT * surface->pitch32;
-#else
-              uint8 *dest = surface->pixels8 + VCOUNT * surface->pitch32;
-#endif
-              uint16 *src = lineMix; // Wii - This was changed to uint16...
+              uint32 *src = lineMix;
               (*renderLine)();
               for(int x = 120; x; x--)
               {
@@ -3298,24 +3260,8 @@ void CPULoop(MDFN_Surface *surface, int ticks)
   }
 }
 
-MDFN_ALIGN(16) uint16 clearLine[240] = { 0 };
-MDFN_ALIGN(16) uint32 clearArray[240] = { 0 }; 
-
 static void Emulate(EmulateSpecStruct *espec)
 {
-  if( clearLine[0] == 0 )
-  {
-    for(int x = 0; x < 240; x++) {
-      clearLine[x] = 0x7fff;
-    }
-  }
-  if( clearArray[0] == 0 )
-  {
-    for(int x = 0; x < 240; x++) {
-      clearArray[x] = 0x80000000;
-    }
-  }
-
  espec->DisplayRect.x = 0;
  espec->DisplayRect.y = 0;
  espec->DisplayRect.w = 240;
@@ -3351,37 +3297,40 @@ static void Emulate(EmulateSpecStruct *espec)
  #endif
 
  padbufblah = padq[0] | (padq[1] << 8);
+
  frameready = 0;
 
  HelloSkipper = espec->skip;
 
- if(pi) HelloSkipper = 1;
+ if(gsf_loader)
+  HelloSkipper = 1;
 
- if(!pi)
+ if(!gsf_loader)
   MDFNMP_ApplyPeriodicCheats();
 
  while(!frameready && (soundTS < 300000))
   CPULoop(espec->surface, 300000);
 
+ if(GBA_RTC)
+  GBA_RTC->AddTime(soundTS);
+
  espec->MasterCycles = soundTS;
 
  espec->SoundBufSize = MDFNGBASOUND_Flush(espec->SoundBuf, espec->SoundBufMaxSize);
 
- if(pi)
+ if(gsf_loader)
   Player_Draw(espec->surface, &espec->DisplayRect, 0, espec->SoundBuf, espec->SoundBufSize);
 }
 
-static bool ToggleLayer(int which)
+static void SetLayerEnableMask(uint64 mask)
 {
- layerSettings ^= 1 << (which + 8);
+ layerSettings = mask << 8;
  layerEnable = layerSettings & DISPCNT;
 
  CPUUpdateRender();
  CPUUpdateRenderBuffers(true);
  CPUUpdateWindow0();
  CPUUpdateWindow1();
-
- return((layerSettings >> (which + 8)) & 1);
 }
 
 static void DoSimpleCommand(int cmd)
@@ -3428,14 +3377,15 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "gamepad",
   "Gamepad",
   NULL,
+  NULL,
   sizeof(IDII) / sizeof(InputDeviceInputInfoStruct),
   IDII,
  }
 };
 
-static const InputPortInfoStruct PortInfo[] = 
-{ 
- { 0, "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" } 
+static const InputPortInfoStruct PortInfo[] =
+{
+ { "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" } 
 };
 
 static InputInfoStruct InputInfo = 
@@ -3446,11 +3396,17 @@ static InputInfoStruct InputInfo =
 
 static const FileExtensionSpecStruct KnownExtensions[] =
 {
+ { ".gsf", gettext_noop("GSF Rip") },
+ { ".minigsf", gettext_noop("MiniGSF Rip") },
  { ".gba", gettext_noop("GameBoy Advance ROM Image") },
  { ".agb", gettext_noop("GameBoy Advance ROM Image") },
  { ".bin", gettext_noop("GameBoy Advance ROM Image") },
  { NULL, NULL }
 };
+
+}
+
+using namespace MDFN_IEN_GBA;
 
 MDFNGI EmulatedGBA =
 {
@@ -3465,11 +3421,14 @@ MDFNGI EmulatedGBA =
  NULL,
  NULL,
  CloseGame,
- ToggleLayer,
+ SetLayerEnableMask,
  "BG0\0BG1\0BG2\0BG3\0OBJ\0WIN 0\0WIN 1\0OBJ WIN\0",
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  MDFNGBA_SetInput,

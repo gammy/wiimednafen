@@ -115,12 +115,10 @@ void CRam::Reset(void)
 
 		// Reverse the bytes in the header words
 		memcpy(&header,mFileData,sizeof(HOME_HEADER));
-#ifndef WII
 		tmp=(header.load_address&0xff00)>>8;
 		header.load_address=(header.load_address<<8)+tmp;
 		tmp=(header.size&0xff00)>>8;
 		header.size=(header.size<<8)+tmp;
-#endif 
 
 		// Now we can safely read/manipulate the data
 		header.load_address-=10;

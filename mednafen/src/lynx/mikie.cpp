@@ -73,9 +73,6 @@ CMikie::CMikie(CSystem& parent)
 	mpDisplayCurrent=NULL;
 	mpRamPointer=NULL;
 
-	mpDisplayCallback=NULL;
-	mDisplayCallbackObject=0;
-
 	mUART_CABLE_PRESENT=FALSE;
 	mpUART_TX_CALLBACK=NULL;
 
@@ -222,8 +219,13 @@ void CMikie::Reset(void)
 
 	 mAUDIO_OUTPUT[y] = 0;
 	}
-	mSTEREO=0xff;	// All channels enabled
-
+	mSTEREO=0xff;	// xored! All channels enabled
+	mPAN=0x00;      // all channels panning OFF
+    mAUDIO_ATTEN[0]=0xff; // Full volume
+    mAUDIO_ATTEN[1]=0xff;
+    mAUDIO_ATTEN[2]=0xff;
+    mAUDIO_ATTEN[3]=0xff;
+    
 	// Start with an empty palette
 
 	for(int loop=0;loop<16;loop++)
@@ -377,9 +379,8 @@ void CMikie::ComLynxTxCallback(void (*function)(int data,uint32 objref),uint32 o
 }
 
 
-void CMikie::DisplaySetAttributes(const MDFN_PixelFormat &format, uint32 Pitch)
+void CMikie::DisplaySetAttributes(const MDFN_PixelFormat &format)
 {
-	mDisplayPitch=Pitch;
 	mpDisplayCurrent=NULL;
 
 	//
@@ -392,19 +393,40 @@ void CMikie::DisplaySetAttributes(const MDFN_PixelFormat &format, uint32 Pitch)
 		mColourMap[Spot.Index]= format.MakeColor(((Spot.Colours.Red * 15) + 30), ((Spot.Colours.Green * 15) + 30),
 							 ((Spot.Colours.Blue * 15) + 30));
 	}
-
-	// Reset screen related counters/vars
-	mTIM_0_CURRENT=0;
-	mTIM_2_CURRENT=0;
-
-	// Fix lastcount so that timer update will definately occur
-	mTIM_0_LAST_COUNT-=(1<<(4+mTIM_0_LINKING))+1;
-	mTIM_2_LAST_COUNT-=(1<<(4+mTIM_2_LINKING))+1;
-
-	// Force immediate timer update
-	gNextTimerEvent=gSystemCycleCount;
 }
 
+template<typename T>
+void CMikie::CopyLineSurface(void)
+{
+	T* bitmap_tmp = mpDisplayCurrent->pix<T>() + mpDisplayCurrentLine * mpDisplayCurrent->pitchinpix;
+
+	if(mpDisplayCurrentLine > 102)
+	{
+	 printf("Lynx Line Overflow: %d\n", mpDisplayCurrentLine);
+	 return;
+	}
+
+	for(uint32 loop = 0; loop < SCREEN_WIDTH / 2; loop++)
+	{
+		uint32 source = mpRamPointer[(uint16)mLynxAddr];
+		if(mDISPCTL_Flip)
+		{
+			mLynxAddr--;
+			*bitmap_tmp=mColourMap[mPalette[source&0x0f].Index];
+			bitmap_tmp++;
+			*bitmap_tmp=mColourMap[mPalette[source>>4].Index];
+			bitmap_tmp++;
+		}
+		else
+		{
+			mLynxAddr++;
+			*bitmap_tmp = mColourMap[mPalette[source>>4].Index];
+			bitmap_tmp++;
+			*bitmap_tmp = mColourMap[mPalette[source&0x0f].Index];
+			bitmap_tmp++;
+		}
+	}
+}
 
 uint32 CMikie::DisplayRenderLine(void)
 {
@@ -461,34 +483,16 @@ uint32 CMikie::DisplayRenderLine(void)
 		// Assign the temporary pointer;
 		if(!mpSkipFrame)
 		{
-			uint32 *bitmap_tmp = mpDisplayCurrent + mpDisplayCurrentLine * mDisplayPitch;
-
-			if(mpDisplayCurrentLine > 102)
+			switch(mpDisplayCurrent->format.bpp)
 			{
-                         printf("Lynx Line Overflow: %d\n", mpDisplayCurrentLine);
-			 bitmap_tmp = mpDisplayCurrent;
+				case 16:
+					CopyLineSurface<uint16>();
+					break;
+
+				case 32:
+					CopyLineSurface<uint32>();
+					break;
 			}
-
-			for(uint32 loop=0;loop<SCREEN_WIDTH/2;loop++)
-			{
-				uint32 source = mpRamPointer[mLynxAddr];
-				if(mDISPCTL_Flip)
-				{
-					mLynxAddr--;
-					*bitmap_tmp=mColourMap[mPalette[source&0x0f].Index];
-					bitmap_tmp++;
-					*bitmap_tmp=mColourMap[mPalette[source>>4].Index];
-					bitmap_tmp++;
-				}
-				else
-				{
-					mLynxAddr++;
-					*bitmap_tmp = mColourMap[mPalette[source>>4].Index];
-					bitmap_tmp++;
-					*bitmap_tmp = mColourMap[mPalette[source&0x0f].Index];
-					bitmap_tmp++;
-				}
-			}	
 
 			if(mpDisplayCurrentLine < 102)
 			 LynxLineDrawn[mpDisplayCurrentLine] = TRUE;
@@ -527,13 +531,6 @@ void CMikie::Poke(uint32 addr,uint8 data)
 	 switch(addr & 0x7)
 	 {
                 case (AUD0VOL&0x7):
-                        // Counter is disabled when volume is zero for optimisation
-                        // reasons, we must update the last use position to stop problems
-                        if(!mAUDIO_VOLUME[which] && data)
-                        {
-                                mAUDIO_LAST_COUNT[which]=gSystemCycleCount;
-                                gNextTimerEvent=gSystemCycleCount;
-                        }
                         mAUDIO_VOLUME[which]=(int8)data;
                         TRACE_MIKIE2("Poke(AUD0VOL,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
                         CombobulateSound(gSystemCycleCount - startTS);
@@ -556,14 +553,6 @@ void CMikie::Poke(uint32 addr,uint8 data)
                         CombobulateSound(gSystemCycleCount - startTS);
                         break;
                 case (AUD0TBACK&0x7):
-                        // Counter is disabled when backup is zero for optimisation
-                        // due to the fact that the output frequency will be above audio
-                        // range, we must update the last use position to stop problems
-                        if(!mAUDIO_BKUP[which] && data)
-                        {
-                                mAUDIO_LAST_COUNT[which]=gSystemCycleCount;
-                                gNextTimerEvent=gSystemCycleCount;
-                        }
                         mAUDIO_BKUP[which]=data;
                         TRACE_MIKIE2("Poke(AUD0TBACK,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
                         CombobulateSound(gSystemCycleCount - startTS);
@@ -856,17 +845,34 @@ void CMikie::Poke(uint32 addr,uint8 data)
 //			BlowOut();
 			break;
 
-		case (ATTEN_A&0xff): mAUDIO_ATTEN[0] = data; CombobulateSound(gSystemCycleCount - startTS); break;
-		case (ATTEN_B&0xff): mAUDIO_ATTEN[1] = data; CombobulateSound(gSystemCycleCount - startTS); break;
-		case (ATTEN_C&0xff): mAUDIO_ATTEN[2] = data; CombobulateSound(gSystemCycleCount - startTS); break;
-		case (ATTEN_D&0xff): mAUDIO_ATTEN[3] = data; CombobulateSound(gSystemCycleCount - startTS); break;
+		case (ATTEN_A&0xff):
+            mAUDIO_ATTEN[0] = data;
+			TRACE_MIKIE2("Poke(ATTEN_A ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
+            CombobulateSound(gSystemCycleCount - startTS);
+            break;
+		case (ATTEN_B&0xff):
+            mAUDIO_ATTEN[1] = data;
+			TRACE_MIKIE2("Poke(ATTEN_B ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
+            CombobulateSound(gSystemCycleCount - startTS);
+            break;
+		case (ATTEN_C&0xff):
+            mAUDIO_ATTEN[2] = data;
+			TRACE_MIKIE2("Poke(ATTEN_C ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
+            CombobulateSound(gSystemCycleCount - startTS);
+            break;
+		case (ATTEN_D&0xff):
+            mAUDIO_ATTEN[3] = data;
+			TRACE_MIKIE2("Poke(ATTEN_D ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
+            CombobulateSound(gSystemCycleCount - startTS);
+            break;
 		case (MPAN&0xff):
-			//printf("Poke %04x (ATTEN_A/B/C/D/MPAN,%02x) at PC=%04x\n",addr,data,mSystem.mCpu->GetPC());
+			TRACE_MIKIE2("Poke(MPAN ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
 			mPAN = data;
 			CombobulateSound(gSystemCycleCount - startTS);
 			break;
 
 		case (MSTEREO&0xff):
+			TRACE_MIKIE2("Poke(MSTEREO ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
 			data^=0xff;
 			mSTEREO=data;
 			CombobulateSound(gSystemCycleCount - startTS);
@@ -889,13 +895,11 @@ void CMikie::Poke(uint32 addr,uint8 data)
 			TRACE_MIKIE2("Poke(SYSCTL1 ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
 			if(!(data&0x02))
 			{
-#ifndef WII
 				C6502_REGS regs;
 				mSystem.GetRegs(regs);
 				MDFN_printf("Runtime Alert - System Halted\nCMikie::Poke(SYSCTL1) - Lynx power down occured at PC=$%04x.\nResetting system.",regs.PC);
 				mSystem.Reset();
 				gSystemHalt=TRUE;
-#endif
 			}
 			mSystem.CartAddressStrobe((data&0x01)?TRUE:FALSE);
 			break;
@@ -1390,12 +1394,25 @@ uint8 CMikie::Peek(uint32 addr)
 
 		// Extra audio control registers
 
-		case (ATTEN_A&0xff):
-		case (ATTEN_B&0xff):
-		case (ATTEN_C&0xff):
-		case (ATTEN_D&0xff):
-		case (MPAN&0xff):
-			TRACE_MIKIE1("Peek(ATTEN_A/B/C/D/MPAN) at PC=%04x",mSystem.mCpu->GetPC());
+        case (ATTEN_A&0xff): 
+            TRACE_MIKIE1("Peek(ATTEN_A) at PC=%04x",mSystem.mCpu->GetPC());
+            return (uint8) mAUDIO_ATTEN[0];
+            break;
+        case (ATTEN_B&0xff): 
+            TRACE_MIKIE1("Peek(ATTEN_B) at PC=%04x",mSystem.mCpu->GetPC());
+            return (uint8) mAUDIO_ATTEN[1];
+            break;
+        case (ATTEN_C&0xff):
+            TRACE_MIKIE1("Peek(ATTEN_C) at PC=%04x",mSystem.mCpu->GetPC());
+            return (uint8) mAUDIO_ATTEN[2];
+            break;
+        case (ATTEN_D&0xff): 
+            TRACE_MIKIE1("Peek(ATTEN_D) at PC=%04x",mSystem.mCpu->GetPC());
+            return (uint8) mAUDIO_ATTEN[3];
+            break;
+        case (MPAN&0xff):
+			TRACE_MIKIE1("Peek(MPAN) at PC=%04x",mSystem.mCpu->GetPC());
+            return (uint8) mPAN;
 			break;
 
 		case (MSTEREO&0xff):
@@ -1532,7 +1549,7 @@ uint8 CMikie::Peek(uint32 addr)
 
 		case (0xfd97&0xff):
 			TRACE_MIKIE2("Peek(%04x) - **** HANDY DETECT ATTEMPTED **** at PC=$%04x",addr,mSystem.mCpu->GetPC());
-//			gError->Warning("EMULATOR DETECT REGISTER HAS BEEN READ");
+//          gError->Warning("EMULATOR DETECT REGISTER HAS BEEN READ");
 			return 0x42;
 			break;
 
@@ -1729,7 +1746,13 @@ int CMikie::StateAction(StateMem *sm, int load, int data_only)
         SFVAR(mAUDIO_INTEGRATE_ENABLE[3]),
         SFVAR(mAUDIO_WAVESHAPER[3]),
 
+        // Lynx 2 extra audio registers
         SFVAR(mSTEREO),
+        SFVAR(mPAN),
+        SFVAR(mAUDIO_ATTEN[0]),
+        SFVAR(mAUDIO_ATTEN[1]),
+        SFVAR(mAUDIO_ATTEN[2]),
+        SFVAR(mAUDIO_ATTEN[3]),
 
         //
         // Serial related variables
@@ -1763,18 +1786,45 @@ int CMikie::StateAction(StateMem *sm, int load, int data_only)
 
 void CMikie::CombobulateSound(uint32 teatime)
 {
-                                int cur_sample = 0;
-                                static int last_sample;
+                                int cur_lsample = 0;
+                                int cur_rsample = 0;
+                                static int last_lsample = 0;
+                                static int last_rsample = 0;
                                 int x;
 
                                 teatime >>= 2;
-                                for(x = 0; x < 4; x++)
-                                 if(mSTEREO & (0x11 << x))
-                                   cur_sample += mAUDIO_OUTPUT[x];
-
-                                if(cur_sample != last_sample)
-                                 miksynth.offset_inline(teatime, cur_sample - last_sample, &mikbuf);
-                                last_sample = cur_sample;
+                                for(x = 0; x < 4; x++){
+                                   /// Assumption (seems there is no documentation for the Attenuation registers)
+                                   /// a) they are linear from $0 to $f
+                                   /// b) an attenuation of $0 is equal to channel OFF (bits in mSTEREO not set)
+                                   /// c) an attenuation of $f is equal to no attenuation (bits in PAN not set)
+                                   /// These assumptions can only checked with an oszilloscope...
+                                   /// the values stored in mSTEREO are bit-inverted ...
+                                   /// mSTEREO was found to be set like that already (why?), but unused
+               
+                                 if(mSTEREO & (0x10 << x))
+                                 {
+                                    if(mPAN & (0x10 << x))
+                                      cur_lsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0xF0))/(15*16);
+                                    else
+                                      cur_lsample += mAUDIO_OUTPUT[x];
+                                 }
+                                 if(mSTEREO & (0x01 << x))
+                                 {
+                                    if(mPAN & (0x01 << x))
+                                      cur_rsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0x0F))/15;
+                                    else
+                                      cur_rsample += mAUDIO_OUTPUT[x];
+                                 }
+                                }
+                                if(cur_lsample != last_lsample){
+                                  miksynth.offset_inline(teatime, cur_lsample - last_lsample, mikbuf.left());
+                                  last_lsample = cur_lsample;
+                                }
+                                if(cur_rsample != last_rsample){
+                                  miksynth.offset_inline(teatime, cur_rsample - last_rsample, mikbuf.right());
+                                  last_rsample = cur_rsample;
+                                }
 }
 
 void CMikie::Update(void)
@@ -2641,10 +2691,10 @@ void CMikie::Update(void)
 			  int y;
 			  for(y = 0; y < 4; y++)
 			  {
-				if(mAUDIO_ENABLE_COUNT[y] && (mAUDIO_ENABLE_RELOAD[y] || !mAUDIO_TIMER_DONE[y]) && mAUDIO_VOLUME[y] && mAUDIO_BKUP[y])
+				if(mAUDIO_ENABLE_COUNT[y] && (mAUDIO_ENABLE_RELOAD[y] || !mAUDIO_TIMER_DONE[y]))
 				{
 					decval=0;
-		
+
 					if(mAUDIO_LINKING[y]==0x07)
 					{
 						int bort;
@@ -2690,7 +2740,8 @@ void CMikie::Update(void)
 							//
 							// Update audio circuitry
 							//
-							mAUDIO_WAVESHAPER[y] = GetLfsrNext(mAUDIO_WAVESHAPER[y]);
+							if(mAUDIO_BKUP[y] || mAUDIO_LINKING[y])
+							 mAUDIO_WAVESHAPER[y] = GetLfsrNext(mAUDIO_WAVESHAPER[y]);
 
 							if(mAUDIO_INTEGRATE_ENABLE[y])
 							{

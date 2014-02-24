@@ -20,55 +20,13 @@
 #ifndef VBA_PORT_H
 #define VBA_PORT_H
 
-// swaps a 16-bit value
-static inline uint16 swap16(uint16 v)
-{
-  return (v<<8)|(v>>8);
-}
+#include "../masmem.h" // FIXME still using old wii build system
+//#include <mednafen/masmem.h>
 
-// swaps a 32-bit value
-static inline uint32 swap32(uint32 v)
-{
-  return (v<<24)|((v<<8)&0xff0000)|((v>>8)&0xff00)|(v>>24);
-}
+#define READ16LE(base) LoadU16_LE(base)
+#define READ32LE(base) LoadU32_LE(base)
 
-#ifndef LSB_FIRST
-#if defined(WII) || (defined(__GNUC__) && defined(__ppc__))
-#define READ16LE(base) \
-  ({ unsigned short lhbrxResult;       \
-     __asm__ ("lhbrx %0, 0, %1" : "=r" (lhbrxResult) : "r" (base) : "memory"); \
-      lhbrxResult; })
-
-#define READ32LE(base) \
-  ({ unsigned long lwbrxResult; \
-     __asm__ ("lwbrx %0, 0, %1" : "=r" (lwbrxResult) : "r" (base) : "memory"); \
-      lwbrxResult; })
-
-#define WRITE16LE(base, value) \
-  __asm__ ("sthbrx %0, 0, %1" : : "r" (value), "r" (base) : "memory")
-  
-#define WRITE32LE(base, value) \
-  __asm__ ("stwbrx %0, 0, %1" : : "r" (value), "r" (base) : "memory")
-  
-#else
-#define READ16LE(x) \
-  swap16(*((uint16 *)(x)))
-#define READ32LE(x) \
-  swap32(*((uint32 *)(x)))
-#define WRITE16LE(x,v) \
-  *((uint16 *)x) = swap16((v))
-#define WRITE32LE(x,v) \
-  *((uint32 *)x) = swap32((v))
-#endif
-#else
-#define READ16LE(x) \
-  *((uint16 *)x)
-#define READ32LE(x) \
-  *((uint32 *)x)
-#define WRITE16LE(x,v) \
-  *((uint16 *)x) = (v)
-#define WRITE32LE(x,v) \
-  *((uint32 *)x) = (v)
-#endif
+#define WRITE16LE(x,v) StoreU16_LE(x,v)
+#define WRITE32LE(x,v) StoreU32_LE(x,v)
 
 #endif

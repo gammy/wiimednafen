@@ -56,15 +56,10 @@
 
 #include "system.h"
 
-#if 0
 #include "../movie.h"
-#endif
 #include "../general.h"
 #include "../mempatcher.h"
 #include "../md5.h"
-
-#include "Emulators.h"
-#include "wii_mednafen.h"
 
 CSystem::CSystem(const uint8 *filememory, int32 filesize)
 	:mCart(NULL),
@@ -77,7 +72,8 @@ CSystem::CSystem(const uint8 *filememory, int32 filesize)
 {
 	mFileType=HANDY_FILETYPE_LNX;
 
-	if(filesize < 11) throw(-1);
+	if(filesize < 11)
+	 MDFN_Error(0, _("Lynx ROM image is too short: %u bytes"), filesize);
 
 	char clip[11];
 	memcpy(clip,filememory,11);
@@ -88,15 +84,7 @@ CSystem::CSystem(const uint8 *filememory, int32 filesize)
 	else if(!strcmp(&clip[0],"LYNX")) mFileType=HANDY_FILETYPE_LNX;
 	else
 	{
-		throw(-1);
-		//CLynxException lynxerr;
-		//delete filememory;
-		//mFileType=HANDY_FILETYPE_ILLEGAL;
-		//lynxerr.Message() << "Handy Error: File format invalid!";
-		//lynxerr.Description()
-		//	<< "The image you selected was not a recognised game cartridge format." << endl
-		//	<< "(see the Handy User Guide for more information).";
-		//throw(lynxerr);
+		throw MDFN_Error(0, _("File format is unknown to module \"%s\"."), MDFNGameInfo->shortname);
 	}
 
 	MDFNMP_Init(65536, 1);
@@ -219,10 +207,12 @@ static int Load(const char *name, MDFNFILE *fp)
  {
   lynxie = new CSystem(fp->data, fp->size);
  }
- catch(int i)
+ catch(std::exception &e)
  {
+  MDFN_PrintError("%s", e.what());
+
   // FIXME:  erhm, free memory here? 
-  return(i);
+  return(0);
  }
 
  int rot = lynxie->CartGetRotate();
@@ -269,7 +259,7 @@ static void Emulate(EmulateSpecStruct *espec)
  espec->DisplayRect.h = 102;
 
  if(espec->VideoFormatChanged)
-  lynxie->DisplaySetAttributes(espec->surface->format, espec->surface->pitch32); // FIXME, pitch
+  lynxie->DisplaySetAttributes(espec->surface->format); // FIXME, pitch
 
  if(espec->SoundFormatChanged)
  {
@@ -288,7 +278,7 @@ static void Emulate(EmulateSpecStruct *espec)
  memset(LynxLineDrawn, 0, sizeof(LynxLineDrawn[0]) * 102);
 
  lynxie->mMikie->mpSkipFrame = espec->skip;
- lynxie->mMikie->mpDisplayCurrent = espec->surface->pixels;
+ lynxie->mMikie->mpDisplayCurrent = espec->surface;
  lynxie->mMikie->mpDisplayCurrentLine = 0;
  lynxie->mMikie->startTS = gSystemCycleCount;
 
@@ -304,12 +294,25 @@ static void Emulate(EmulateSpecStruct *espec)
 
   for(int y = 0; y < 102; y++)
   {
-   uint32 *row = espec->surface->pixels + y * espec->surface->pitch32;
-
-   if(!LynxLineDrawn[y])
+   if(espec->surface->format.bpp == 16)
    {
-    for(int x = 0; x < 160; x++)
-     row[x] = color_black;
+    uint16 *row = espec->surface->pixels16 + y * espec->surface->pitchinpix;
+
+    if(!LynxLineDrawn[y])
+    {
+     for(int x = 0; x < 160; x++)
+      row[x] = color_black;
+    }
+   }
+   else
+   {
+    uint32 *row = espec->surface->pixels + y * espec->surface->pitchinpix;
+
+    if(!LynxLineDrawn[y])
+    {
+     for(int x = 0; x < 160; x++)
+      row[x] = color_black;
+    }
    }
   }
  }
@@ -319,7 +322,7 @@ static void Emulate(EmulateSpecStruct *espec)
  if(espec->SoundBuf)
  {
   lynxie->mMikie->mikbuf.end_frame((gSystemCycleCount - lynxie->mMikie->startTS) >> 2);
-  espec->SoundBufSize = lynxie->mMikie->mikbuf.read_samples(espec->SoundBuf, espec->SoundBufMaxSize);
+  espec->SoundBufSize = lynxie->mMikie->mikbuf.read_samples(espec->SoundBuf, espec->SoundBufMaxSize) / 2; // divide by nr audio chn
  }
  else
   espec->SoundBufSize = 0;
@@ -367,10 +370,10 @@ static int StateAction(StateMem *sm, int load, int data_only)
  return(1);
 }
 
-static bool ToggleLayer(int which)
+static void SetLayerEnableMask(uint64 mask)
 {
 
- return(1);
+
 }
 
 static void DoSimpleCommand(int cmd)
@@ -417,6 +420,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "gamepad",
   "Gamepad",
   NULL,
+  NULL,
   sizeof(IDII) / sizeof(InputDeviceInputInfoStruct),
   IDII,
  }
@@ -424,7 +428,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
 
 static const InputPortInfoStruct PortInfo[] =
 {
- { 0, "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, 0 }
+ { "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, 0 }
 };
 
 static InputInfoStruct InputInfo =
@@ -452,11 +456,14 @@ MDFNGI EmulatedLynx =
  NULL,
  NULL,
  CloseGame,
- ToggleLayer,
- "",
+ SetLayerEnableMask,
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  SetInput,
@@ -478,6 +485,6 @@ MDFNGI EmulatedLynx =
  160,	// Framebuffer width
  102,	// Framebuffer height
 
- 1,     // Number of output sound channels
+ 2,     // Number of output sound channels
 };
 

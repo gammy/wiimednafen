@@ -22,6 +22,9 @@
 
 #include "Gfx.h"
 
+namespace MDFN_IEN_GBA
+{
+
 //#define SPRITE_DEBUG
 
 void gfxDrawTextScreen(uint16, uint16, uint16, uint32 *);
@@ -67,14 +70,14 @@ void gfxDrawOBJWin(void);
 //void gfxDecreaseBrightness(uint32 *line, int coeff);
 //void gfxAlphaBlend(uint32 *ta, uint32 *tb, int ca, int cb);
 
-extern uint8 AlphaClampLUT[64];
+extern uint32 AlphaClampLUT[64];
 extern MDFN_ALIGN(16) uint32 line0[512];
 extern MDFN_ALIGN(16) uint32 line1[512];
 extern MDFN_ALIGN(16) uint32 line2[512];
 extern MDFN_ALIGN(16) uint32 line3[512];
 extern MDFN_ALIGN(16) uint32 lineOBJ[512];
 extern MDFN_ALIGN(16) uint32 lineOBJWin[512];
-extern MDFN_ALIGN(16) uint16 lineMix[512];
+extern MDFN_ALIGN(16) uint32 lineMix[512];
 extern bool gfxInWin0[512];
 extern bool gfxInWin1[512];
 
@@ -91,16 +94,12 @@ extern int gfxBG3LastX;
 extern int gfxBG3LastY;
 extern int gfxLastVCOUNT;
 
-extern MDFN_ALIGN(16) uint16 clearLine[240];
-extern MDFN_ALIGN(16) uint32 clearArray[240];
-
 static INLINE void gfxClearArray(uint32 *array)
 {
- // memcpy( array, clearArray, 240 * sizeof(uint32) );
- //MDFN_FastU32MemsetM8(array, 0x80000000, 240);
-  for(int i = 0; i < 240; i++) {
-    *array++ = 0x80000000;
-  }
+ MDFN_FastU32MemsetM8(array, 0x80000000, 240);
+ // for(int i = 0; i < 240; i++) {
+ //   *array++ = 0x80000000;
+ // }
 }
 
 // Max coefficient is 16, so...
@@ -227,6 +226,8 @@ static INLINE void gfxAlphaBlend(uint32 *ta, uint32 *tb, int ca, int cb)
       tb++;
     }
   }
+}
+
 }
 
 #endif // VBA_GFX_DRAW_H

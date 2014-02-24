@@ -21,6 +21,9 @@
 #include "gbGlobals.h"
 #include "memory.h"
 
+namespace MDFN_IEN_GB
+{
+
 mapperMBC1 gbDataMBC1 = {
   0, // RAM enable
   1, // ROM bank
@@ -177,7 +180,7 @@ mapperMBC3 gbDataMBC3 = {
   0, // timer latched hours
   0, // timer latched days
   0, // timer latched control
-  (time_t)-1 // last time
+  ~0ULL // last time
 };
 
 void memoryUpdateMBC3Clock()
@@ -944,4 +947,6 @@ void memoryUpdateMapHuC3()
     gbMemoryMap[0x0a] = &gbRam[tmpAddress];
     gbMemoryMap[0x0b] = &gbRam[tmpAddress + 0x1000];
   }
+}
+
 }

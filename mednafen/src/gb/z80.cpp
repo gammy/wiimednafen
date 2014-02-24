@@ -5,6 +5,9 @@
 #include "gbGlobals.h"
 #include "memory.h"
 
+namespace MDFN_IEN_GB
+{
+
 // GameBoy Z80-clone emulation
 
 static const uint16 DAATable[] = {
@@ -473,4 +476,6 @@ int GBZ80_StateAction(StateMem *sm, int load, int data_only)
  }
 
  return(ret);
+}
+
 }

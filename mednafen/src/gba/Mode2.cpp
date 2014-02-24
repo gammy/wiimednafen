@@ -21,18 +21,17 @@
 #include "Gfx.h"
 #include "gfx-draw.h"
 
+namespace MDFN_IEN_GBA
+{
+
 void mode2RenderLine()
 {
   uint16 *palette = (uint16 *)paletteRAM;
 
   if(DISPCNT & 0x80) {
-#if 1
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
     gfxLastVCOUNT = VCOUNT;
     return;
   }
@@ -126,13 +125,11 @@ void mode2RenderLineNoWindow()
   uint16 *palette = (uint16 *)paletteRAM;
 
   if(DISPCNT & 0x80) {
-#ifndef WII
+// FIXME WIIFIX need we do something here?
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
+
     gfxLastVCOUNT = VCOUNT;
     return;
   }
@@ -273,13 +270,10 @@ void mode2RenderLineAll()
   uint16 *palette = (uint16 *)paletteRAM;
 
   if(DISPCNT & 0x80) {
-#ifndef WII
+// FIXME WIIFIX need we do something here?
     for(int x = 0; x < 240; x++) {
       lineMix[x] = 0x7fff;
     }
-#else
-    memcpy( lineMix, clearLine, 240 * sizeof(uint16) );  
-#endif
     gfxLastVCOUNT = VCOUNT;
     return;
   }
@@ -488,4 +482,6 @@ void mode2RenderLineAll()
   gfxBG2Changed = 0;
   gfxBG3Changed = 0;
   gfxLastVCOUNT = VCOUNT;      
+}
+
 }

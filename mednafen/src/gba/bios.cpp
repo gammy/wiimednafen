@@ -22,9 +22,11 @@
 #include "Globals.h"
 
 #include <math.h>
-#if 0
-#include <memory.h>
-#endif
+#include "../memory.h" // FIXME still using old wii build system
+//#include <memory.h>
+
+namespace MDFN_IEN_GBA
+{
 
 int16 sineTable[256] = {
   (int16)0x0000, (int16)0x0192, (int16)0x0323, (int16)0x04B5, (int16)0x0645, (int16)0x07D5, (int16)0x0964, (int16)0x0AF1,
@@ -1159,4 +1161,6 @@ void BIOS_SndDriverJmpTableCopy()
     CPUWriteMemory(reg[0].I, 0x9c);
     reg[0].I += 4;
   }
+}
+
 }

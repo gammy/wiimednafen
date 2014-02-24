@@ -26,6 +26,9 @@
 
 #include "Port.h"
 
+namespace MDFN_IEN_GBA
+{
+
 //#define SPRITE_DEBUG
 
 void mode0RenderLine();
@@ -53,14 +56,14 @@ void mode5RenderLineNoWindow();
 void mode5RenderLineAll();
 
 extern int all_coeff[32];
-extern uint8 AlphaClampLUT[64];
+extern uint32 AlphaClampLUT[64];
 extern MDFN_ALIGN(16) uint32 line0[512];
 extern MDFN_ALIGN(16) uint32 line1[512];
 extern MDFN_ALIGN(16) uint32 line2[512];
 extern MDFN_ALIGN(16) uint32 line3[512];
 extern MDFN_ALIGN(16) uint32 lineOBJ[512];
 extern MDFN_ALIGN(16) uint32 lineOBJWin[512];
-extern MDFN_ALIGN(16) uint16 lineMix[512];
+extern MDFN_ALIGN(16) uint32 lineMix[512];
 extern bool gfxInWin0[512];
 extern bool gfxInWin1[512];
 
@@ -76,5 +79,7 @@ extern int gfxBG3Y;
 extern int gfxBG3LastX;
 extern int gfxBG3LastY;
 extern int gfxLastVCOUNT;
+
+}
 
 #endif // VBA_GFX_H

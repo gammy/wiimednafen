@@ -21,13 +21,16 @@
 #include "Gfx.h"
 #include "gfx-draw.h"
 
+namespace MDFN_IEN_GBA
+{
+
 int all_coeff[32] = 
 {
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
   16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16
 };
 
-uint8 AlphaClampLUT[64] = 
+uint32 AlphaClampLUT[64] = 
 {
  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
@@ -42,7 +45,7 @@ MDFN_ALIGN(16) uint32 line2[512];
 MDFN_ALIGN(16) uint32 line3[512];
 MDFN_ALIGN(16) uint32 lineOBJ[512];
 MDFN_ALIGN(16) uint32 lineOBJWin[512];
-MDFN_ALIGN(16) uint16 lineMix[512];
+MDFN_ALIGN(16) uint32 lineMix[512];
 
 bool gfxInWin0[512];
 bool gfxInWin1[512];
@@ -1403,3 +1406,4 @@ void gfxDrawOBJWin(void)
   }
 }
 
+}

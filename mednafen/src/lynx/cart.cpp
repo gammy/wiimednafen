@@ -53,8 +53,6 @@
 #include "../state.h"
 #include "../md5.h"
 
-#include "wii_hash.h"
-#include "wii_mednafen.h"
 LYNX_HEADER CCart::DecodeHeader(const uint8 *data)
 {
  LYNX_HEADER header;
@@ -111,7 +109,9 @@ CCart::CCart(const uint8 *gamedata, uint32 gamesize)
 	
 	// Checkout the header bytes
 	if(gamesize <= HEADER_RAW_SIZE)
-	 throw(-1);
+	{
+	 throw MDFN_Error(0, _("Lynx ROM image is too small: %u bytes"), gamesize);
+	}
 
 	header = DecodeHeader(gamedata);
 	gamedata += HEADER_RAW_SIZE;
@@ -122,7 +122,7 @@ CCart::CCart(const uint8 *gamedata, uint32 gamesize)
 	// Sanity checks on the header
 	if(header.magic[0]!='L' || header.magic[1]!='Y' || header.magic[2]!='N' || header.magic[3]!='X' || header.version!=1)
 	{
-		throw(-1);
+                throw MDFN_Error(0, _("Missing or corrupted \"LYNX\" header magic."));
 	}
 
 	// Setup name & manufacturer
@@ -170,14 +170,7 @@ CCart::CCart(const uint8 *gamedata, uint32 gamesize)
 			mCountMask0=0x7ff;
 			break;
 		default:
-			//return(0);
-			//CLynxException lynxerr;
-			//lynxerr.Message() << "Handy Error: File format invalid (Bank0)";
-			//lynxerr.Description()
-			//	<< "The image you selected was not a recognised game cartridge format." << endl
-			//	<< "(see the Handy User Guide for more information).";
-			//throw(lynxerr);
-			throw(0);
+			throw MDFN_Error(0, _("Lynx file format invalid (Bank0)"));
 			break;
 	}
 
@@ -214,14 +207,7 @@ CCart::CCart(const uint8 *gamedata, uint32 gamesize)
 			mCountMask1=0x7ff;
 			break;
 		default:
-			//return(0);
-			//CLynxException lynxerr;
-			//lynxerr.Message() << "Handy Error: File format invalid (Bank1)";
-			//lynxerr.Description()
-			//	<< "The image you selected was not a recognised game cartridge format." << endl
-			//	<< "(see the Handy User Guide for more information).";
-			//throw(lynxerr);
-			throw(0);
+			throw MDFN_Error(0, _("Lynx file format invalid (Bank1)"));
 			break;
 	}
 

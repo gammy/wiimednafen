@@ -22,9 +22,8 @@
 #include "Port.h"
 
 #include <time.h>
-#if 0
-#include <memory.h>
-#endif
+#include "../memory.h" // FIXME still using old wii build system
+//#include <memory.h>
 
 namespace MDFN_IEN_GBA
 {
@@ -47,6 +46,11 @@ void RTC::InitTime(void)
  time( &long_time );                /* Get time as long integer. */
 
  curtime = (int64)long_time * 16777216;
+}
+
+void RTC::AddTime(int32 amount)
+{
+ curtime += amount;
 }
 
 uint16 RTC::Read(uint32 address)

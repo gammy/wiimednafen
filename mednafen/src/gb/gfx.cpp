@@ -18,9 +18,13 @@
 
 #include "../mednafen.h"
 //#include <memory.h>
+#include "memory.h"
 
 #include "gbGlobals.h"
 #include "gb.h"
+
+namespace MDFN_IEN_GB
+{
 
 static const uint8 gbInvertTab[256] = 
 {
@@ -58,14 +62,22 @@ static const uint8 gbInvertTab[256] =
   0x1f,0x9f,0x5f,0xdf,0x3f,0xbf,0x7f,0xff
 };
 
-uint16 gbLineMix[160];
+union __gblmt
+{
+ uint16 cgb[160];
+ uint8 dmg[160];
+ uint32 dmg_32[40];
+} gbLineMix;
 
-void gbRenderLine()
+//uint16 gbLineMix[160];
+
+template<bool cgb_mode>
+static INLINE void DrawBG(void)
 {
   uint8 * bank0;
   uint8 * bank1;
 
-  if(gbCgbMode) {
+  if(cgb_mode) {
     bank0 = &gbVram[0x0000];
     bank1 = &gbVram[0x2000];
   } else {
@@ -122,7 +134,7 @@ void gbRenderLine()
 
   if(register_LCDC & 0x80) 
   {
-    if((register_LCDC & 0x01 || gbCgbMode) && (gblayerSettings & 0x01)) 
+    if((register_LCDC & 0x01 || cgb_mode) && (gblayerSettings & 0x01)) 
     {
       while(x < 160) {
         uint8 tile_a = 0;
@@ -148,20 +160,20 @@ void gbRenderLine()
         while(bx > 0) {
           uint8 c = (tile_a & bx) ? 1 : 0;
           c += ((tile_b & bx) ? 2 : 0);
-          
+
           gbLineBuffer[x] = c; // mark the gbLineBuffer color
-          
+
           if(attrs & 0x80)
             gbLineBuffer[x] |= 0x300;
-          
-          if(gbCgbMode) 
+
+          if(cgb_mode)
 	  {
            c = c + (attrs & 7)*4;
-           gbLineMix[x] = gbPalette[c];
+           gbLineMix.cgb[x] = gbPalette[c];
           } 
 	  else 
 	  {
-	   gbLineMix[x] = gbBgp[c];
+	   gbLineMix.dmg[x] = gbBgp[c];
           }
 
           x++;
@@ -188,11 +200,15 @@ void gbRenderLine()
     } 
     else 
     {
-     int fill_color = gbCgbMode ? gbPalette[0] : 0;
+     int fill_color = cgb_mode ? gbPalette[0] : 0;
 
      for(int i = 0; i < 160; i++) 
      {
-      gbLineMix[i] = fill_color;
+      if(cgb_mode)
+       gbLineMix.cgb[i] = fill_color;
+      else
+       gbLineMix.dmg[i] = fill_color;
+
       gbLineBuffer[i] = 0;
      }
     }
@@ -278,14 +294,14 @@ void gbRenderLine()
               else
                 gbLineBuffer[x] = 0x100 + c;
               
-              if(gbCgbMode) 
+              if(cgb_mode) 
 	      {
                c = c + (attrs & 7) * 4;
-               gbLineMix[x] = gbPalette[c];
+               gbLineMix.cgb[x] = gbPalette[c];
               } 
 	      else 
 	      {
-               gbLineMix[x] = gbBgp[c];
+               gbLineMix.dmg[x] = gbBgp[c];
               }
   
               x++;
@@ -314,22 +330,27 @@ void gbRenderLine()
   }
   else 
   {
-   int fill_color = gbCgbMode ? gbPalette[0] : 8;
+   int fill_color = cgb_mode ? gbPalette[0] : 8;
 
    for(int i = 0; i < 160; i++) 
    {
-    gbLineMix[i] = fill_color;
+    if(cgb_mode)
+     gbLineMix.cgb[i] = fill_color;
+    else
+     gbLineMix.dmg[i] = fill_color;
+
     gbLineBuffer[i] = 0;
    }
   }
 }
 
-void gbDrawSpriteTile(int tile, int x,int y,int t, int flags,
+template<bool cgb_mode>
+static INLINE void DrawSpriteTile(int tile, int x,int y,int t, int flags,
                       int size,int spriteNumber)
 {
   uint8 * bank0;
   uint8 * bank1;
-  if(gbCgbMode) {
+  if(cgb_mode) {
     if(register_VBK & 1) {
       bank0 = &gbVram[0x0000];
       bank1 = &gbVram[0x2000];
@@ -362,7 +383,7 @@ void gbDrawSpriteTile(int tile, int x,int y,int t, int flags,
   int a = 0;
   int b = 0;
 
-  if(gbCgbMode && flags & 0x08) {
+  if(cgb_mode && flags & 0x08) {
     a = bank1[address++];
     b = bank1[address++];
   } else {
@@ -404,7 +425,7 @@ void gbDrawSpriteTile(int tile, int x,int y,int t, int flags,
         if(sprite < spriteNumber)
           continue;
       } else {
-        if(gbCgbMode) {
+        if(cgb_mode) {
           if(sprite < spriteNumber)
             continue;
         } else {
@@ -418,58 +439,70 @@ void gbDrawSpriteTile(int tile, int x,int y,int t, int flags,
     gbLineBuffer[xxx] = 0x200 + spriteNumber;
 
     // make sure that sprites will work even in CGB mode
-    if(gbCgbMode) 
+    if(cgb_mode)
     {
      c = c + (flags & 0x07)*4 + 32;
-     gbLineMix[xxx] = gbPalette[c];
+     gbLineMix.cgb[xxx] = gbPalette[c];
     } 
     else 
     {
      c = pal[c];
      c += 4;
-     gbLineMix[xxx] = c;
+     gbLineMix.dmg[xxx] = c;
     }
   }
 }
 
-void gbDrawSprites()
+template<bool cgb_mode>
+static void DrawSprites(void)
 {
   int x = 0;
   int y = 0;
   int count = 0;
-  
-  int size = (register_LCDC & 4);
+  int size = (register_LCDC & 4) >> 2;
 
   if(!(register_LCDC & 0x80))
     return;
 
   if((register_LCDC & 2) && (gblayerSettings & 0x04)) {
     int yc = register_LY;
-      
+
     int address = 0;
     for(int i = 0; i < 40; i++) {
       y = gbOAM[address++];
       x = gbOAM[address++];
-      int tile = gbOAM[address++];
-      if(size)
-        tile &= 254;
+      int tile = gbOAM[address++] &~ size;
       int flags = gbOAM[address++];
 
       if(x > 0 && y > 0 && x < 168 && y < 160) {
         // check if sprite intersects current line
-        int t = yc -y + 16;
-        if(size && t >=0 && t < 16) {
-          gbDrawSpriteTile(tile,x-8,yc,t,flags,size,i);
-          count++;
-        } else if(!size && t >= 0 && t < 8) {
-          gbDrawSpriteTile(tile, x-8, yc, t, flags,size,i);
+        int t = yc - y + 16;
+
+        if((unsigned)t < (8U << size)) {
+          DrawSpriteTile<cgb_mode>(tile, x-8, yc, t, flags, size, i);
           count++;
         }
       }
       // sprite limit reached!
       if(count >= 10)
         break;
-    }   
+    }
   }
 }
 
+
+void gbRenderLine(void)
+{
+ if(gbCgbMode)
+ {
+  DrawBG<true>();
+  DrawSprites<true>();
+ }
+ else
+ {
+  DrawBG<false>();
+  DrawSprites<false>();
+ }
+}
+
+}

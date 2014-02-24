@@ -21,13 +21,11 @@
 #include "flash.h"
 #include "sram.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
+#include "../memory.h" // FIXME still using old wii build system
+//#include <memory.h>
 
-#if 0
-#include <memory.h>
-#endif
+namespace MDFN_IEN_GBA
+{
 
 #define FLASH_READ_ARRAY         0
 #define FLASH_CMD_1              1
@@ -67,11 +65,7 @@ int GBA_Flash_StateAction(StateMem *sm, int load, int data_only)
 
 bool GBA_Flash_Init(void)
 {
-//#ifdef MEM2
-//  if(!(flashSaveMemory = (uint8 *)Mem2ManagerAlloc(0x20000, _("flash memory"))))
-//#else
-  if(!(flashSaveMemory = (uint8 *)MDFN_malloc(0x20000, _("flash memory"))))
-//#endif
+ if(!(flashSaveMemory = (uint8 *)MDFN_malloc(0x20000, _("flash memory"))))
   return(0);
 
  memset(flashSaveMemory, 0x00, 0x20000);
@@ -82,9 +76,7 @@ void GBA_Flash_Kill(void)
 {
  if(flashSaveMemory)
  {
-//#ifndef MEM2
-  MDFN_free(flashSaveMemory);
-//#endif
+  free(flashSaveMemory);
   flashSaveMemory = NULL;
  }
 }
@@ -233,4 +225,6 @@ void flashWrite(uint32 address, uint8 byte)
     flashReadState = FLASH_READ_ARRAY;
     break;
   }
+}
+
 }

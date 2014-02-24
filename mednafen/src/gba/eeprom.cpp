@@ -17,10 +17,12 @@
 // Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 #include "GBA.h"
-#if 0
-#include <memory.h>
-#endif
+#include "../memory.h" // FIXME still using old wii build system
+//#include <memory.h>
 #include "eeprom.h"
+
+namespace MDFN_IEN_GBA
+{
 
 extern int cpuDmaCount;
 
@@ -218,4 +220,5 @@ void eepromWrite(uint32 /* address */, uint8 value)
     break;
   }
 }
-  
+
+}

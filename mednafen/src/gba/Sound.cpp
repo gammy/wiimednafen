@@ -19,20 +19,19 @@
 #include "GBA.h"
 #include "Globals.h"
 #include "Sound.h"
-
-#ifdef WII
 #include "Port.h"
-#endif
 
-#if 0
-#include <memory.h>
-#endif
+#include "../memory.h" // FIXME Still using old wii build system
+//#include <memory.h>
 #include <math.h>
 
 #include <blip/Blip_Buffer.h>
 #include "gb_apu/Gb_Apu.h"
 
 #include <blip/Stereo_Buffer.h>
+
+namespace MDFN_IEN_GBA
+{
 
 typedef Blip_Synth<blip_good_quality, 0xFF * 2> Synth;
 
@@ -220,11 +219,7 @@ void soundEvent(uint32 address, uint16 data)
     }
     soundDSBEnabled = (data & 0x3000) ? true : false;
     soundDSBTimer = (data & 0x4000) ? 1 : 0;
-#ifndef WII
-    *((uint16 *)&ioMem[address]) = data;    
-#else
-    WRITE16LE((uint16 *)&ioMem[address], data);
-#endif
+    WRITE16LE(((uint16 *)&ioMem[address]), data);
     break;
   case FIFOA_L:
   case FIFOA_H:
@@ -232,11 +227,7 @@ void soundEvent(uint32 address, uint16 data)
     soundDSFifoA[soundDSFifoAWriteIndex++] = data >> 8;
     soundDSFifoACount += 2;
     soundDSFifoAWriteIndex &= 31;
-#ifndef WII
-    *((uint16 *)&ioMem[address]) = data;    
-#else
-    WRITE16LE((uint16 *)&ioMem[address], data);
-#endif
+    WRITE16LE(((uint16 *)&ioMem[address]), data);
     break;
   case FIFOB_L:
   case FIFOB_H:
@@ -244,19 +235,11 @@ void soundEvent(uint32 address, uint16 data)
     soundDSFifoB[soundDSFifoBWriteIndex++] = data >> 8;
     soundDSFifoBCount += 2;
     soundDSFifoBWriteIndex &= 31;
-#ifndef WII
-    *((uint16 *)&ioMem[address]) = data;    
-#else
-    WRITE16LE((uint16 *)&ioMem[address], data);
-#endif
+    WRITE16LE(((uint16 *)&ioMem[address]), data);
     break;
   case 0x88:
     data &= 0xC3FF;
-#ifndef WII
-    *((uint16 *)&ioMem[address]) = data;    
-#else
-    WRITE16LE((uint16 *)&ioMem[address], data);
-#endif
+    WRITE16LE(((uint16 *)&ioMem[address]), data);
     break;
   case 0x90:
   case 0x92:
@@ -270,8 +253,8 @@ void soundEvent(uint32 address, uint16 data)
     gba_apu.write_register(soundTS, 0xFF30 + (address & 0xF), data & 0xFF);
     gba_apu.write_register(soundTS, 0xFF30 + (address & 0xF) + 1, data >> 8);
     //*((uint16 *)&sound3WaveRam[(sound3Bank*0x10)^0x10+(address&14)]) = data;
-    //*((uint16 *)&ioMem[address]) = data;    
-    break;    
+    //WRITE16LE(((uint16 *)&ioMem[address]), data);
+    break;
   }
 }
 
@@ -464,4 +447,6 @@ bool MDFNGBA_SetSoundRate(uint32 rate)
 {
  gba_buf.set_sample_rate(rate?rate:44100, 60);
  return(TRUE);
+}
+
 }

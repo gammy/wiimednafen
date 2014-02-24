@@ -8,92 +8,93 @@
 
 class MDFNFILE
 {
-public:
+	public:
 
-  MDFNFILE();
-  ~MDFNFILE();
+	MDFNFILE();
+	// WIP constructors:
+	MDFNFILE(const char *path, const FileExtensionSpecStruct *known_ext, const char *purpose = NULL);
 
-  bool Open(const char *path, const FileExtensionSpecStruct *known_ext, const char *purpose = NULL, const bool suppress_notfound_pe = FALSE);
-  INLINE bool Open(const std::string &path, const FileExtensionSpecStruct *known_ext, const char *purpose = NULL, const bool suppress_notfound_pe = FALSE)
-  {
-    return(Open(path.c_str(), known_ext, purpose, suppress_notfound_pe));
-  }
+	~MDFNFILE();
 
-  bool ApplyIPS(FILE *);
-  bool Close(void);
+	bool Open(const char *path, const FileExtensionSpecStruct *known_ext, const char *purpose = NULL, const bool suppress_notfound_pe = FALSE);
+	INLINE bool Open(const std::string &path, const FileExtensionSpecStruct *known_ext, const char *purpose = NULL, const bool suppress_notfound_pe = FALSE)
+	{
+	 return(Open(path.c_str(), known_ext, purpose, suppress_notfound_pe));
+	}
 
-  const int64 &size;
-  const uint8 * const &data;
-  const char * const &ext;
+        bool ApplyIPS(FILE *);
+	bool Close(void);
 
-  // Currently, only valid with Open()
-  inline int GetErrorCode(int *get_errno = NULL)
-  {
-    if(get_errno)
-      *get_errno = local_errno;
+	const int64 &size;
+	const uint8 * const &data;
+	const char * const &ext;
 
-    return(error_code);
-  }
+	// Currently, only valid with Open()
+	inline int GetErrorCode(int *get_errno = NULL)
+	{
+	 if(get_errno)
+	  *get_errno = local_errno;
 
-  inline int64 Size(void)
-  {
-    return(f_size);
-  }
+	 return(error_code);
+	}
 
-  inline const uint8 *Data(void)
-  {
-    return(f_data);
-  }
+	inline int64 Size(void)
+	{
+	 return(f_size);
+	}
 
-  uint64 fread(void *ptr, size_t size, size_t nmemb);
-  int fseek(int64 offset, int whence);
+	inline const uint8 *Data(void)
+	{
+	 return(f_data);
+	}
+	
+	uint64 fread(void *ptr, size_t size, size_t nmemb);
+	int fseek(int64 offset, int whence);
 
-  inline uint64 ftell(void)
-  {
-    return(location);
-  }
+	inline uint64 ftell(void)
+	{
+	 return(location);
+	}
 
-  inline void rewind(void)
-  {
-    location = 0;
-  }
+	inline void rewind(void)
+	{
+	 location = 0;
+	}
 
-  int read32le(uint32 *Bufo);
-  int read16le(uint16 *Bufo);
+	int read32le(uint32 *Bufo);
+	int read16le(uint16 *Bufo);
 
-  inline int fgetc(void)
-  {
-    if(location < f_size)
-      return f_data[location++];
+	inline int fgetc(void)
+	{
+	 if(location < f_size)
+	  return f_data[location++];
 
-    return EOF;
-  }
+	 return EOF;
+	}
 
-  inline int fisarchive(void)
-  {
-    return(0);
-  }
+	inline int fisarchive(void)
+	{
+	 return(0);
+	}
 
-  char *fgets(char *s, int size);
+	char *fgets(char *s, int size);
 
-  uint8 *f_data;
+	private:
 
-private:
-  bool isgame;
+        uint8 *f_data;
+        int64 f_size;
+        char *f_ext;
 
-  int64 f_size;
-  char *f_ext;
+	int error_code;
+	int local_errno;
 
-  int error_code;
-  int local_errno;
+        int64 location;
 
-  int64 location;
+	#ifdef HAVE_MMAP
+	bool is_mmap;
+	#endif
 
-#ifdef HAVE_MMAP
-  bool is_mmap;
-#endif
-
-  bool MakeMemWrap(void *tz, int type);
+	bool MakeMemWrapAndClose(void *tz, int type);
 };
 
 #if 0
@@ -114,32 +115,32 @@ char *MDFN_fgets(char *s, int size, MDFNFILE *);
 
 class PtrLengthPair
 {
-public:
+ public:
 
-  inline PtrLengthPair(const void *new_data, const uint64 new_length)
-  {
-    data = new_data;
-    length = new_length;
-  }
+ inline PtrLengthPair(const void *new_data, const uint64 new_length)
+ {
+  data = new_data;
+  length = new_length;
+ }
 
-  ~PtrLengthPair() 
-  { 
+ ~PtrLengthPair() 
+ { 
 
-  } 
+ } 
 
-  INLINE const void *GetData(void) const
-  {
-    return(data);
-  }
+ INLINE const void *GetData(void) const
+ {
+  return(data);
+ }
 
-  INLINE uint64 GetLength(void) const
-  {
-    return(length);
-  }
+ INLINE uint64 GetLength(void) const
+ {
+  return(length);
+ }
 
-private:
-  const void *data;
-  uint64 length;
+ private:
+ const void *data;
+ uint64 length;
 };
 
 #include <vector>
