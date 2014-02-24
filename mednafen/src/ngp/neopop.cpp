@@ -15,6 +15,7 @@
 #include "neopop.h"
 #include "../general.h"
 #include "../md5.h"
+#include "../FileStream.h"
 
 #include "TLCS900h_interpret.h"
 #include "TLCS900h_registers.h"
@@ -26,6 +27,8 @@
 #include "dma.h"
 #include "bios.h"
 #include "flash.h"
+
+#include <algorithm>
 
 extern uint8 CPUExRAM[16384];
 
@@ -66,6 +69,7 @@ static uint8 *chee;
 
 bool NGPFrameSkip;
 int32 ngpc_soundTS = 0;
+//static int32 main_timeaccum;
 static int32 z80_runtime;
 
 static void Emulate(EmulateSpecStruct *espec)
@@ -93,10 +97,36 @@ static void Emulate(EmulateSpecStruct *espec)
 
 	ngpc_soundTS = 0;
 	NGPFrameSkip = espec->skip;
+
 	do
 	{
-	 int timetime = TLCS900h_interpret();
+#if 0
+         int32 timetime;
 
+	 if(main_timeaccum == 0)
+	 {
+	  main_timeaccum = TLCS900h_interpret();
+          if(main_timeaccum > 255)
+	  {
+	   main_timeaccum = 255;
+           printf("%d\n", main_timeaccum);
+	  }
+	 }
+
+	 timetime = std::min<int32>(main_timeaccum, 24);
+	 main_timeaccum -= timetime;
+#else
+	 int32 timetime = (uint8)TLCS900h_interpret();	// This is sooo not right, but it's replicating the old behavior(which is necessary
+							// now since I've fixed the TLCS900h core and other places not to truncate cycle counts
+							// internally to 8-bits).  Switch to the #if 0'd block of code once we fix cycle counts in the
+							// TLCS900h core(they're all sorts of messed up), and investigate if certain long
+							// instructions are interruptable(by interrupts) and later resumable, RE Rockman Battle
+							// & Fighters voice sample playback.
+#endif
+	 //if(timetime > 255)
+	 // printf("%d\n", timetime);
+
+	 // Note: Don't call updateTimers with a time/tick/cycle/whatever count greater than 255.
 	 MeowMeow |= updateTimers(espec->surface, timetime);
 
 	 z80_runtime += timetime;
@@ -131,15 +161,11 @@ static bool TestMagic(const char *name, MDFNFILE *fp)
 
 static int Load(const char *name, MDFNFILE *fp)
 {
-#ifdef MEM2
- ngpc_rom.data = fp->f_data;
-#else
  if(!(ngpc_rom.data = (uint8 *)MDFN_malloc(fp->size, _("Cart ROM"))))
-   return(0);
-  memcpy(ngpc_rom.data, fp->data, fp->size);
-#endif
+  return(0);
 
  ngpc_rom.length = fp->size;
+ memcpy(ngpc_rom.data, fp->data, fp->size);
 
  md5_context md5;
  md5.starts();
@@ -165,6 +191,7 @@ static int Load(const char *name, MDFNFILE *fp)
 
  bios_install();
 
+ //main_timeaccum = 0;
  z80_runtime = 0;
 
  reset();
@@ -252,10 +279,10 @@ static void DoSimpleCommand(int cmd)
 
 static const MDFNSetting_EnumList LanguageList[] =
 {
- { "english", 0, gettext_noop("English") },
+ { "japanese", 0, gettext_noop("Japanese") },
  { "0", 0 },
 
- { "japanese", 1, gettext_noop("Japanese") },
+ { "english", 1, gettext_noop("English") },
  { "1", 1 },
 
  { NULL, 0 },
@@ -270,39 +297,40 @@ static MDFNSetting NGPSettings[] =
 
 bool system_io_flash_read(uint8* buffer, uint32 bufferLength)
 {
- FILE *fp = fopen(MDFN_MakeFName(MDFNMKF_SAV, 0, "flash").c_str(), "rb");
- if(!fp) return(0);
-
- if(!fread(buffer, 1, bufferLength, fp))
+ try
  {
-  fclose(fp);
+  FileStream fp(MDFN_MakeFName(MDFNMKF_SAV, 0, "flash").c_str(), FileStream::MODE_READ);
+
+  fp.read(buffer, bufferLength);
+ }
+ catch(std::exception &e)
+ {
+  //if(ene.Errno() == ENOENT)  . asdf
   return(0);
  }
-
- fclose(fp);
 
  return(1);
 }
 
 bool system_io_flash_write(uint8* buffer, uint32 bufferLength)
 {
- FILE *fp = fopen(MDFN_MakeFName(MDFNMKF_SAV, 0, "flash").c_str(), "wb");
- if(!fp) return(0);
-
- if(!fwrite(buffer, 1, bufferLength, fp))
+ try
  {
-  fclose(fp);
+  FileStream fp(MDFN_MakeFName(MDFNMKF_SAV, 0, "flash").c_str(), FileStream::MODE_WRITE);
+
+  fp.write(buffer, bufferLength);
+ }
+ catch(std::exception &e)
+ {
   return(0);
  }
-
- fclose(fp);
 
  return(1);
 }
 
-static bool ToggleLayer(int which)
+static void SetLayerEnableMask(uint64 mask)
 {
- return(NGPGfx->ToggleLayer(which));
+ NGPGfx->SetLayerEnableMask(mask);
 }
 
 static const InputDeviceInputInfoStruct IDII[] =
@@ -321,6 +349,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
   "gamepad",
   "Gamepad",
   NULL,
+  NULL,
   sizeof(IDII) / sizeof(InputDeviceInputInfoStruct),
   IDII,
  }
@@ -328,7 +357,7 @@ static InputDeviceInfoStruct InputDeviceInfo[] =
 
 static const InputPortInfoStruct PortInfo[] =
 {
- { 0, "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" }
+ { "builtin", "Built-In", sizeof(InputDeviceInfo) / sizeof(InputDeviceInfoStruct), InputDeviceInfo, "gamepad" }
 };
 
 static InputInfoStruct InputInfo =
@@ -357,11 +386,14 @@ MDFNGI EmulatedNGP =
  NULL,
  NULL,
  CloseGame,
- ToggleLayer,
+ SetLayerEnableMask,
  "Background Scroll\0Foreground Scroll\0Sprites\0",
  NULL,
  NULL,
  NULL,
+ NULL,
+ NULL,
+ false,
  StateAction,
  Emulate,
  SetInput,

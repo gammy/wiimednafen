@@ -36,7 +36,7 @@ class NGPGFX_CLASS
  uint16 read16(uint32 address);
 
  int StateAction(StateMem *sm, int load, int data_only);
- bool ToggleLayer(int which);
+ void SetLayerEnableMask(uint64 mask);
  void set_pixel_format(const MDFN_PixelFormat &format);
 
  bool draw(MDFN_Surface *surface, bool skip);

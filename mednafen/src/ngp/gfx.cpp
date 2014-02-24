@@ -212,10 +212,9 @@ int NGPGFX_CLASS::StateAction(StateMem *sm, int load, int data_only)
  return(1);
 }
 
-bool NGPGFX_CLASS::ToggleLayer(int which)
+void NGPGFX_CLASS::SetLayerEnableMask(uint64 mask)
 {
- layer_enable ^= 1 << which;
- return(layer_enable & (1 << which));
+ layer_enable = mask;
 }
 
 //extern uint32 ngpc_soundTS;

@@ -127,8 +127,8 @@ static const int noise_periods [3] = { 0x100, 0x200, 0x400 };
 blip_inline void T6W28_Noise::reset()
 {
 	period = &noise_periods [0];
-	shifter = 0x8000;
-	tap = 12;
+	shifter = 0x4000;
+	tap = 13;
 	T6W28_Osc::reset();
 }
 
@@ -179,7 +179,7 @@ void T6W28_Noise::run( sms_time_t time, sms_time_t end_time )
 		do
 		{
 			int changed = (shifter + 1) & 2; // set if prev and next bits differ
-			shifter = (((shifter << 15) ^ (shifter << tap)) & 0x8000) | (shifter >> 1);
+			shifter = (((shifter << 14) ^ (shifter << tap)) & 0x4000) | (shifter >> 1);
 			if ( changed )
 			{
 				delta_left = -delta_left;
@@ -355,15 +355,15 @@ void T6W28_Apu::write_data_right( sms_time_t time, int data )
                         noise.period = &noise.period_extra;
 
                 int const tap_disabled = 16;
-                noise.tap = (data & 0x04) ? 12 : tap_disabled;
-                noise.shifter = 0x8000;
+                noise.tap = (data & 0x04) ? 13 : tap_disabled;
+                noise.shifter = 0x4000;
         }
 }
 
 
 T6W28_ApuState *T6W28_Apu::save_state(void)
 {
- T6W28_ApuState *ret = (T6W28_ApuState *)MDFN_malloc(sizeof(T6W28_ApuState), "ApuState");
+ T6W28_ApuState *ret = (T6W28_ApuState *)malloc(sizeof(T6W28_ApuState));
 
  for(int x = 0; x < 4; x++)
  {

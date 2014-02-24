@@ -18,6 +18,8 @@
 
 #include "../mednafen.h"
 #include "../mempatcher.h"
+#include "../masmem.h" // FIXME still using old wii build system
+//#include <mednafen/masmem.h>
 
 #include <stdio.h>
 #include <stdlib.h>

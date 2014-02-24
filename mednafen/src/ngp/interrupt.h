@@ -31,7 +31,7 @@ void reset_timers(void);
 void reset_int(void);
 
 //Call this after each instruction
-bool updateTimers(MDFN_Surface *surface, uint8 cputicks);
+bool updateTimers(MDFN_Surface *surface, int cputicks);
 
 //H-INT Timer
 extern uint32 timer_hint;

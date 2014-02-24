@@ -226,7 +226,7 @@ void TestIntHDMA(int bios_num, int vec_num)
 extern int32 ngpc_soundTS;
 extern bool NGPFrameSkip;
 
-bool updateTimers(MDFN_Surface *surface, uint8 cputicks)
+bool updateTimers(MDFN_Surface *surface, int cputicks)
 {
 	bool ret = 0;
 

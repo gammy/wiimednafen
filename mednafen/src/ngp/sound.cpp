@@ -104,7 +104,7 @@ int MDFNNGPCSOUND_StateAction(StateMem *sm, int load, int data_only)
  }
  else
  {
-  sn_state = (T6W28_ApuState *)MDFN_malloc(sizeof(T6W28_ApuState), "sn_state");
+  sn_state = (T6W28_ApuState *)malloc(sizeof(T6W28_ApuState));
  }
 
  SFORMAT StateRegs[] =
@@ -128,7 +128,7 @@ int MDFNNGPCSOUND_StateAction(StateMem *sm, int load, int data_only)
 
  if(!MDFNSS_StateAction(sm, load, data_only, StateRegs, "SND"))
  {
-  MDFN_free(sn_state);
+  free(sn_state);
   return(0);
  }
 
@@ -141,6 +141,6 @@ int MDFNNGPCSOUND_StateAction(StateMem *sm, int load, int data_only)
   LastDACRight = CurrentDACRight;
  }
 
- MDFN_free(sn_state);
+ free(sn_state);
  return(1);
 }

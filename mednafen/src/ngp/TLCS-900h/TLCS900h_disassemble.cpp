@@ -209,7 +209,7 @@ void get_rr_Name(void)
 
 	if (size == 0 && first == 0xC7)
 	{
-		sprintf(str_r, extra);
+		sprintf(str_r, "%s", extra);
 		return;
 	}
 

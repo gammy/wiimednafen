@@ -50,7 +50,7 @@ namespace TLCS900H
 //Interprets a single instruction from 'pc', 
 //pc is incremented to the start of the next instruction.
 //Returns the number of cycles taken for this instruction
-uint8 TLCS900h_interpret(void);
+int32 TLCS900h_interpret(void);
 
 //=============================================================================
 
@@ -60,7 +60,7 @@ extern uint8 first;			//First byte
 extern uint8 second;			//Second byte
 extern uint8 R;				//(second & 7)
 extern uint8 rCode;
-extern uint8 cycles;
+extern int32 cycles;
 extern bool brCode;
 
 //=============================================================================

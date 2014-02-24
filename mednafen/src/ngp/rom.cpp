@@ -17,10 +17,6 @@
 #include "interrupt.h"
 #include "TLCS900h_disassemble.h"
 
-#ifdef MEM2
-#include "mem2.h"
-#endif
-
 //=============================================================================
 
 RomInfo ngpc_rom;
@@ -132,11 +128,7 @@ void rom_loaded(void)
 {
 	int i;
 
-#ifdef MEM2
-	ngpc_rom.orig_data = (uint8 *)Mem2ManagerAlloc(ngpc_rom.length, "rom.orig_data");
-#else
-	ngpc_rom.orig_data = (uint8 *)MDFN_malloc(ngpc_rom.length, "rom.orig_data");
-#endif
+	ngpc_rom.orig_data = (uint8 *)malloc(ngpc_rom.length);
 	memcpy(ngpc_rom.orig_data, ngpc_rom.data, ngpc_rom.length);
 
 	//Extract the header
@@ -170,9 +162,7 @@ void rom_unload(void)
 
 	flash_commit();
 
-#ifndef MEM2
-	MDFN_free(ngpc_rom.data);
-#endif
+	free(ngpc_rom.data);
 	ngpc_rom.data = NULL;
 	ngpc_rom.length = 0;
 	rom_header = 0;
@@ -183,9 +173,7 @@ void rom_unload(void)
 
  if(ngpc_rom.orig_data)
  {
-#ifndef MEM2
-  MDFN_free(ngpc_rom.orig_data);
-#endif
+  free(ngpc_rom.orig_data);
   ngpc_rom.orig_data = NULL;
  }
 }

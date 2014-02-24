@@ -86,8 +86,8 @@ uint8		second;		//The second opcode
 bool	brCode;		//Register code used?
 uint8		rCode;		//The code
 
-uint8		cycles;			//How many state changes?
-uint8		cycles_extra;	//How many extra state changes?
+int32		cycles;		//How many state changes?
+int32		cycles_extra;	//How many extra state changes?
 
 //=========================================================================
 
@@ -954,7 +954,7 @@ static void (*decode[256])() =
 
 //=============================================================================
 
-uint8 TLCS900h_interpret(void)
+int32 TLCS900h_interpret(void)
 {
 	brCode = FALSE;
 

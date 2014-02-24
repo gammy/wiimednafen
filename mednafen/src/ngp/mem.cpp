@@ -55,12 +55,9 @@ static uint8 *FastReadMap[256], *FastReadMapReal[256];
 
 void SetFRM(void) // Call this function after rom is loaded
 {
-#ifdef WII
- // Causes issues if it isn't reset...
- for( int x = 0; x < 256; x++ )
- {
-   FastReadMapReal[x] = NULL;
- }
+#ifndef WII
+ for(unsigned int x = 0; x < 256; x++)
+  FastReadMapReal[x] = NULL;
 #endif
 
  for(unsigned int x = 0x20; x <= 0x3f; x++)
@@ -260,18 +257,18 @@ uint16 loadW(uint32 address)
 	 return(loadB(address) | (loadB(address + 1) << 8));
 
 	if(FastReadMap[address >> 16])
-	 return(le16toh(*(uint16*)&FastReadMap[address >> 16][address]));
+	 return(LoadU16_LE((uint16*)&FastReadMap[address >> 16][address]));
 
         uint16* ptr = (uint16*)translate_address_read(address);
 	if(ptr)
-                return le16toh(*ptr);
+                return LoadU16_LE(ptr);
 
         if(address >= 0x8000 && address <= 0xbfff)
          return(NGPGfx->read16(address));
 
         if(address >= 0x4000 && address <= 0x7fff)
 	{
-         return(le16toh(*(uint16 *)(CPUExRAM + address - 0x4000)));
+         return(LoadU16_LE((uint16 *)(CPUExRAM + address - 0x4000)));
 	}
 	if(address == 0x50)
 	 return(SC0BUF);
@@ -438,7 +435,7 @@ void storeW(uint32 address, uint16 data)
         }
         if(address >= 0x4000 && address <= 0x7fff)
         {
-         *(uint16 *)(CPUExRAM + address - 0x4000) = htole16(data);
+         StoreU16_LE((uint16 *)(CPUExRAM + address - 0x4000), data);
          return;
         }
         if(address >= 0x70 && address <= 0x7F)
@@ -509,7 +506,7 @@ void storeW(uint32 address, uint16 data)
 	//Write
 	if (ptr)
 	{
-		*ptr = htole16(data);
+		StoreU16_LE(ptr, data);
 	}
         //else
         //        printf("ACK16: %08x %04x\n", address, data);
@@ -611,11 +608,8 @@ void reset_memory(void)
 	storeB(0x6F86, 0x00);	// No user answer (?)
 
 	//Language: 0 = Japanese, 1 = English
-#ifndef WII
+	// FIXME WIIFIX ?
 	storeB(0x6F87, MDFN_GetSettingB("ngp.language"));
-#else
-        storeB(0x6F87, !!emuRegistry.NeoGeoPocketEmu.getGameLanguage() );
-#endif
 
 	//Color Mode Selection: 0x00 = B&W, 0x10 = Colour
 	storeB(0x6F91, rom_header->mode);
