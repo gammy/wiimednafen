@@ -28,7 +28,8 @@
 #include "../mednafen.h"
 #include <math.h>
 #include "filter.h"
-#include "../cputest/cputest.h"
+#include "../cputest/cputest.h" // FIXME still using old wii build system
+//#include "../cputest/cputest.h"
 
 #if defined(ARCH_POWERPC_ALTIVEC) && defined(HAVE_ALTIVEC_H)
  #include <altivec.h>
