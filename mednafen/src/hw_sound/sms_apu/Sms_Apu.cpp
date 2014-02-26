@@ -1,6 +1,7 @@
 // Sms_Snd_Emu 0.1.4. http://www.slack.net/~ant/
 
-#include "mednafen/mednafen.h"
+#include "../mednafen.h" // FIXME still using old wii build system
+//#include "mednafen/mednafen.h"
 #include "Sms_Apu.h"
 
 /* Copyright (C) 2003-2006 Shay Green. This module is free software; you

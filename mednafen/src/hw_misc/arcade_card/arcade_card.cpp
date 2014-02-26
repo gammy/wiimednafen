@@ -18,7 +18,8 @@
  Arcade Card emulation based on information provided by Ki and David Shadoff
 */
 
-#include "mednafen/mednafen.h"
+#include "../mednafen.h" // FIXME still using old wii build system
+//#include "mednafen/mednafen.h"
 
 //#include "pce.h"
 //#include "huc.h"

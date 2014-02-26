@@ -172,8 +172,13 @@ void MDVDP::Reset(void)
 
     RedoViewport();
 
+#ifndef WII
     memset(&clip, 0, sizeof(clip));
     memset(&pixel_32, 0, sizeof(pixel_32));
+#else
+    memset(clip, 0, sizeof(clip));
+    memset(pixel_32, 0, sizeof(pixel_32));
+#endif
 
     SyncColors();
 }

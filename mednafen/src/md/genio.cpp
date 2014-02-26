@@ -365,7 +365,14 @@ void MDINPUT_SetInput(int aport, const char *type, void *ptr)
   itype = DEVICE_MM;
  }
 
- data_ptr[aport] = ptr;
+#ifdef WII
+ if(ptr)
+ {
+  data_ptr[aport] = ptr;
+ }
+#else
+  data_ptr[aport] = ptr;
+#endif
  SetDevice(aport, itype);
 
  UpdateBusThing(md_timestamp);

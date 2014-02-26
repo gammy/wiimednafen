@@ -41,8 +41,10 @@ found freely through public domain sources.
 //////////////////////////////////////////////////////////
 // CPU routines
 
-#include "mednafen/mednafen.h"
-#include <mednafen/masmem.h>
+#include "../mednafen.h"   // FIXME still using old wii build system
+#include "../masmem.h"     // FIXME still using old wii build system
+//#include "mednafen/mednafen.h"
+//#include <mednafen/masmem.h>
 
 //#include "pcfx.h"
 //#include "debug.h"

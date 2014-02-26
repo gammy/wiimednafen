@@ -34,6 +34,7 @@
 #include	"video/Deinterlacer.h"
 #include	"file.h"
 #include	"cdrom/cdromif.h"
+
 #include	"mempatcher.h"
 #include	"compress/minilzo.h"
 #include	"tests.h"
@@ -44,15 +45,14 @@
 
 #include	"string/escape.h"
 
-#include	"cdrom/CDUtility.h"
-
 #ifndef WII
 #include	"netplay.h"
 #include	"netplay-driver.h"
 #include	"qtrecord.h"
 #include	"sound/WAVRecord.h"
+#include	"cdrom/CDUtility.h"
 #else
-#include "FileWrapper.h" // Usually included from qtrecord which we don't have
+#include 	"FileWrapper.h" // Usually included from qtrecord which we don't have
 #ifdef WII_NETTRACE
 #include 	<network.h>
 #include 	"net_print.h"
@@ -323,9 +323,11 @@ void MDFNI_CloseGame(void)
   MDFNGameInfo = NULL;
   MDFN_StateEvilEnd();
 
+#ifndef WII
   for(unsigned i = 0; i < CDInterfaces.size(); i++)
    delete CDInterfaces[i];
   CDInterfaces.clear();
+#endif
  }
 #ifndef WII
  TBlur_Kill();
@@ -496,6 +498,7 @@ static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
 
 MDFNGI *MDFNI_LoadCD(const char *force_module, const char *devicename, const bool is_device)
 {
+#ifndef WII
  uint8 LayoutMD5[16];
 
  MDFNI_CloseGame();
@@ -703,6 +706,7 @@ MDFNGI *MDFNI_LoadCD(const char *force_module, const char *devicename, const boo
   memset(&last_pixel_format, 0, sizeof(MDFN_PixelFormat));
 
  return(MDFNGameInfo);
+#endif
 }
 
 // Return FALSE on fatal error(IPS file found but couldn't be applied),
@@ -1136,7 +1140,9 @@ bool MDFNI_InitializeModules(const std::vector<MDFNGI *> &ExternalSystems)
 
  MDFNSystemsPrio.sort(MDFNSystemsPrio_CompareFunc);
 
+#ifndef WII
  CDUtility::CDUtility_Init();
+#endif
 
  return(1);
 }
